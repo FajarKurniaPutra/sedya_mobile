@@ -152,6 +152,22 @@ class _ProjectCard extends StatelessWidget {
                   color: AppColors.textSecondary,
                 ),
               ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  const Icon(LucideIcons.user, size: 12, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Pembuat: ${project.creator.name}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               if (DummyData.currentUser.role == 'Pemimpin Proyek') ...[
                 const SizedBox(height: 16),
                 Row(
