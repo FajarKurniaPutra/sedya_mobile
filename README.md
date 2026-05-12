@@ -1,1 +1,90 @@
-# sedya_mobile
+# 📱 Sedya Mobile App
+
+Sedya Mobile adalah aplikasi manajemen proyek (Project Management) dan evaluasi kinerja SDM berbasis seluler yang dirancang untuk membantu tim dan perusahaan mengelola tugas, merencanakan sprint, serta mengevaluasi kinerja anggota tim secara kolaboratif. Aplikasi ini terintegrasi langsung dengan backend web Laravel.
+
+---
+
+## 🌟 Fitur Utama
+
+### 1. Manajemen Proyek (Project Management)
+- **Daftar Proyek**: Menampilkan proyek-proyek yang melibatkan pengguna dengan indikator status (Aktif/Selesai).
+- **Detail Proyek**: Ringkasan informasi, tahapan (Perencanaan, Pengerjaan, Review, dll), dan pencipta proyek.
+- **Anggota & Peran**: Mengelola tim di dalam proyek dengan peran khusus (Pemimpin Projek, Human Resource, Anggota).
+
+### 2. Manajemen Tugas (Task Management)
+- **Tugas Harian & Labeling**: Pembuatan tugas dengan rincian deskripsi, bobot tugas, prioritas, deadline, dan label area (Desain, Frontend, Backend, dll).
+- **Sprint Management**: Perencanaan siklus kerja berjangka waktu (Weekly Sprint).
+- **Multi-PIC**: Satu tugas dapat ditugaskan kepada lebih dari satu anggota.
+
+### 3. Evaluasi Kinerja (HR Dashboard)
+- **Rapor Kinerja**: Perhitungan bobot tugas yang telah diselesaikan untuk mengukur efektivitas dan kontribusi anggota.
+- **Status Mingguan**: Visibilitas performa tim di tingkat HR dan pimpinan.
+
+### 4. Fitur Tambahan
+- **Authentication**: Dukungan login dengan Google Sign-In terintegrasi sistem Backend.
+- **Dark Mode**: Tema gelap responsif yang memanjakan mata.
+- **Push Notification** *(in development)*: Menggunakan Firebase Cloud Messaging.
+
+---
+
+## 🗂 Struktur Direktori Aplikasi
+
+Aplikasi dibangun menggunakan **Flutter** dengan arsitektur MVCS (Model-View-Controller/Service) yang disederhanakan:
+
+```text
+lib/
+ ┣ core/                # Inti konfigurasi aplikasi
+ ┃ ┣ api_config.dart    # Konfigurasi endpoint & IP Backend
+ ┃ ┣ constants.dart     # Token Warna, Tema & Styling (Light/Dark Mode)
+ ┃ ┗ theme_notifier.dart# Pengelola state untuk mode tema
+ ┣ models/              # Struktur data (Class Models)
+ ┃ ┗ models.dart        # Model Project, Task, AppUser, Sprint, Note, dll.
+ ┣ providers/           # State Management (Provider)
+ ┃ ┗ auth_provider.dart # Mengurus otentikasi user & token JWT
+ ┣ services/            # Komunikasi API dengan Backend
+ ┃ ┣ api_service.dart   # Base HTTP Client & Interceptors
+ ┃ ┣ project_service.dart
+ ┃ ┣ sprint_service.dart
+ ┃ ┗ task_service.dart
+ ┣ ui/                  # Tampilan Antarmuka Pengguna
+ ┃ ┣ screens/           # Halaman Utama (Login, Dashboard, Detail)
+ ┃ ┗ global_layout.dart # Kerangka dasar aplikasi (AppBar, Bottom Nav)
+ ┗ main.dart            # Entry point aplikasi Flutter
+```
+
+---
+
+## 📈 Log Perubahan & Progress (Changelog)
+
+### **Versi 1.0.0-beta.3 (Bug Fix Round 3 - Stabilitas & UI/UX)**
+- **UI/UX Modal**: Memperbaiki masalah validasi form di mana pesan *SnackBar* tertutup oleh modal form. Sekarang digantikan dengan *Inline Error Banner* yang lebih modern.
+- **Keamanan Crash (Red Screen)**: Mencegah error *async gap* dan *widget disposal* yang sering menyebabkan layar merah (red screen of death) ketika pengguna menutup halaman Detail Tugas secara cepat.
+- **Sinkronisasi Dropdown**: Menyeragamkan opsi dropdown aplikasi mobile agar 100% sama dengan backend web (Tahapan Proyek & Label Tugas).
+- **Optimalisasi Kode**: Membersihkan lebih dari 500 baris kode duplikat (dead code) pada file antarmuka proyek.
+- **Perbaikan Login**: Mencegah crash *BuildContext* saat sinkronisasi profil Google.
+
+### **Versi 1.0.0-beta.2 (Data Parsing & Routing)**
+- Menghubungkan fungsionalitas UI dengan *API endpoint* asli dari Laravel (menggantikan *dummy data*).
+- Menambahkan *refresh indicator* pada daftar proyek dan detail sprint.
+- Menyempurnakan pemetaan (*mapping*) JSON untuk status tugas ("TODO", "IN_PROGRESS", "REVIEW", "DONE").
+
+### **Versi 1.0.0-beta.1 (Struktur Dasar & Theming)**
+- Inisialisasi awal proyek Flutter.
+- Pembuatan antarmuka pengguna berbasis `AppColors` dengan dukungan *Dark Mode*.
+- Pembuatan *Bottom Navigation* utama dan sistem perutean layar.
+
+---
+
+## 🚀 Instalasi & Menjalankan Aplikasi
+
+1. Pastikan **Backend Laravel** sedang menyala di jaringan lokal Anda (`php artisan serve --host=0.0.0.0 --port=8000`).
+2. Ketahui *IPv4 Address* dari Wi-Fi komputer Anda (menggunakan perintah `ipconfig` di Windows).
+3. Buka file `lib/core/api_config.dart`.
+4. Ubah variabel `baseUrl` dengan IP Anda:
+   ```dart
+   static const String baseUrl = 'http://192.168.x.x:8000';
+   ```
+5. Jalankan aplikasi di emulator atau perangkat fisik:
+   ```bash
+   flutter run
+   ```

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 import '../global_layout.dart';
 import '../../core/constants.dart';
-import '../../core/dummy_data.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/project_service.dart';
 import 'project_detail_screen.dart';
 
 class ProjectListScreen extends StatefulWidget {
@@ -14,67 +16,166 @@ class ProjectListScreen extends StatefulWidget {
 }
 
 class _ProjectListScreenState extends State<ProjectListScreen> {
-  final List<Project> _projects = DummyData.projects;
+  final ProjectService _projectService = ProjectService();
+  List<Project> _projects = [];
+  List<Project> _filteredProjects = [];
+  bool _isLoading = true;
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProjects();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProjects() async {
+    setState(() => _isLoading = true);
+    final projects = await _projectService.getProjects();
+    if (mounted) {
+      setState(() {
+        _projects = projects;
+        _applySearch();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _applySearch() {
+    if (_searchQuery.isEmpty) {
+      _filteredProjects = List.from(_projects);
+    } else {
+      _filteredProjects = _projects.where((p) =>
+        p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+        p.code.toLowerCase().contains(_searchQuery.toLowerCase())
+      ).toList();
+    }
+  }
 
   void _showProjectForm([Project? project]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _ProjectFormModal(project: project),
+      builder: (ctx) => _ProjectFormModal(
+        project: project,
+        onSaved: () {
+          Navigator.pop(ctx);
+          _loadProjects(); // Refresh list setelah simpan
+        },
+      ),
     );
+  }
+
+  Future<void> _toggleProjectStatus(Project project) async {
+    final resp = await _projectService.toggleStatus(project.id);
+    if (resp.success) {
+      _loadProjects();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Status proyek "${project.name}" diperbarui')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+
     return GlobalLayout(
-      title: 'Proyek Anda',
+      title: 'Dashboard',
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Text(
+              'Selamat Datang, ${auth.currentUser?.name ?? "Pengguna"}!',
+              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Berikut adalah daftar proyek Anda.',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
             // Search Bar
             TextField(
+              controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Cari proyek...',
                 prefixIcon: const Icon(LucideIcons.search),
                 contentPadding: const EdgeInsets.symmetric(vertical: 0),
               ),
+              onChanged: (val) {
+                setState(() {
+                  _searchQuery = val;
+                  _applySearch();
+                });
+              },
             ),
             const SizedBox(height: 16),
-            // Create Project Button (Only for Leader)
-            if (DummyData.currentUser.role == 'Pemimpin Proyek') ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _showProjectForm(),
-                  icon: const Icon(LucideIcons.plus),
-                  label: const Text('BUAT PROYEK'),
-                ),
+            // Create Project Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showProjectForm(),
+                icon: const Icon(LucideIcons.plus),
+                label: const Text('BUAT PROYEK'),
               ),
-              const SizedBox(height: 24),
-            ],
+            ),
+            const SizedBox(height: 24),
             // Project List
             Expanded(
-              child: ListView.separated(
-                itemCount: _projects.length,
-                separatorBuilder: (ctx, i) => const SizedBox(height: 16),
-                itemBuilder: (ctx, i) {
-                  final project = _projects[i];
-                  return _ProjectCard(
-                    project: project,
-                    onEdit: () => _showProjectForm(project),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ProjectDetailScreen(project: project),
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filteredProjects.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              // TODO: [TUGAS REKAN] Task 5 - Tambahkan sebuah gambar ilustrasi (menggunakan Image.asset) ketika daftar proyek kosong, bukan sekadar Icon.
+                              Icon(LucideIcons.folderOpen, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+                              const SizedBox(height: 16),
+                              Text(
+                                _searchQuery.isNotEmpty ? 'Proyek tidak ditemukan' : 'Belum ada proyek',
+                                style: const TextStyle(color: AppColors.textSecondary),
+                              ),
+                            ],
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadProjects,
+                          child: ListView.separated(
+                            itemCount: _filteredProjects.length,
+                            separatorBuilder: (ctx, i) => const SizedBox(height: 16),
+                            itemBuilder: (ctx, i) {
+                              final project = _filteredProjects[i];
+                              return _ProjectCard(
+                                project: project,
+                                currentUserId: auth.currentUser?.id ?? 0,
+                                onEdit: () => _showProjectForm(project),
+                                onToggleStatus: () => _toggleProjectStatus(project),
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => ProjectDetailScreen(projectId: project.id),
+                                    ),
+                                  );
+                                  _loadProjects();
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      );
-                    },
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -85,17 +186,30 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
 class _ProjectCard extends StatelessWidget {
   final Project project;
+  final int currentUserId;
   final VoidCallback onEdit;
+  final VoidCallback onToggleStatus;
   final VoidCallback onTap;
 
   const _ProjectCard({
     required this.project,
+    required this.currentUserId,
     required this.onEdit,
+    required this.onToggleStatus,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Check per-project role from members list
+    bool isLeader = false;
+    for (final m in project.members) {
+      if (m.userId == currentUserId) {
+        isLeader = m.roleName == 'Pemimpin Projek' || m.roleName == 'Pemimpin Proyek';
+        break;
+      }
+    }
+
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
@@ -121,12 +235,14 @@ class _ProjectCard extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: project.status == 'Active'
+                      color: project.statusActive
                           ? AppColors.statusDone.withValues(alpha: 0.1)
                           : AppColors.statusOverdue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(20),
@@ -136,7 +252,7 @@ class _ProjectCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: project.status == 'Active'
+                        color: project.statusActive
                             ? AppColors.statusDone
                             : AppColors.statusOverdue,
                       ),
@@ -146,7 +262,7 @@ class _ProjectCard extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                project.code,
+                project.code.isNotEmpty ? project.code : '—',
                 style: const TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
@@ -159,7 +275,7 @@ class _ProjectCard extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      'Pembuat: ${project.creator.name}',
+                      'Pembuat: ${project.creator?.name ?? '-'}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
@@ -168,7 +284,7 @@ class _ProjectCard extends StatelessWidget {
                   ),
                 ],
               ),
-              if (DummyData.currentUser.role == 'Pemimpin Proyek') ...[
+              if (isLeader) ...[
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -189,27 +305,43 @@ class _ProjectCard extends StatelessWidget {
                           showDialog(
                             context: context,
                             builder: (ctx) => AlertDialog(
-                              title: const Text('Nonaktifkan Proyek'),
-                              content: Text('Yakin ingin menonaktifkan proyek ${project.name}?'),
+                              title: Text(project.statusActive ? 'Nonaktifkan Proyek' : 'Aktifkan Proyek'),
+                              content: Text('Yakin ingin ${project.statusActive ? "menonaktifkan" : "mengaktifkan"} proyek ${project.name}?'),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(ctx),
                                   child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
                                 ),
                                 ElevatedButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  style: ElevatedButton.styleFrom(backgroundColor: AppColors.statusOverdue),
-                                  child: const Text('Nonaktifkan'),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    onToggleStatus();
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: project.statusActive ? AppColors.statusOverdue : AppColors.statusDone,
+                                  ),
+                                  child: Text(project.statusActive ? 'Nonaktifkan' : 'Aktifkan'),
                                 ),
                               ],
                             ),
                           );
                         },
-                        icon: const Icon(LucideIcons.ban, size: 16, color: AppColors.statusOverdue),
-                        label: const Text('Nonaktifkan', style: TextStyle(color: AppColors.statusOverdue)),
+                        icon: Icon(
+                          project.statusActive ? LucideIcons.ban : LucideIcons.checkCircle2,
+                          size: 16,
+                          color: project.statusActive ? AppColors.statusOverdue : AppColors.statusDone,
+                        ),
+                        label: Text(
+                          project.statusActive ? 'Nonaktifkan' : 'Aktifkan',
+                          style: TextStyle(
+                            color: project.statusActive ? AppColors.statusOverdue : AppColors.statusDone,
+                          ),
+                        ),
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 8),
-                          side: const BorderSide(color: AppColors.statusOverdue),
+                          side: BorderSide(
+                            color: project.statusActive ? AppColors.statusOverdue : AppColors.statusDone,
+                          ),
                         ),
                       ),
                     ),
@@ -224,110 +356,213 @@ class _ProjectCard extends StatelessWidget {
   }
 }
 
-class _ProjectFormModal extends StatelessWidget {
+class _ProjectFormModal extends StatefulWidget {
   final Project? project;
+  final VoidCallback onSaved;
 
-  const _ProjectFormModal({this.project});
+  const _ProjectFormModal({this.project, required this.onSaved});
+
+  @override
+  State<_ProjectFormModal> createState() => _ProjectFormModalState();
+}
+
+class _ProjectFormModalState extends State<_ProjectFormModal> {
+  final ProjectService _projectService = ProjectService();
+  late TextEditingController _nameController;
+  late TextEditingController _codeController;
+  late TextEditingController _descController;
+  String _selectedPhase = 'Perencanaan';
+  bool _isSaving = false;
+  String? _errorText; // Fix #1: inline error instead of SnackBar behind modal
+
+  static const _validPhases = ['Perencanaan', 'Pengerjaan', 'Review', 'Selesai', 'Tertunda'];
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.project?.name);
+    _codeController = TextEditingController(text: widget.project?.code);
+    _descController = TextEditingController(text: widget.project?.description);
+    _selectedPhase = _validPhases.contains(widget.project?.phase) ? widget.project!.phase : 'Perencanaan';
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _codeController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProject() async {
+    if (_nameController.text.trim().isEmpty) {
+      setState(() => _errorText = 'Nama proyek wajib diisi');
+      return;
+    }
+    if (_codeController.text.trim().isEmpty) {
+      setState(() => _errorText = 'Kode proyek wajib diisi');
+      return;
+    }
+
+    setState(() {
+      _errorText = null;
+      _isSaving = true;
+    });
+
+    final isEdit = widget.project != null;
+    final resp = isEdit
+        ? await _projectService.updateProject(
+            widget.project!.id,
+            name: _nameController.text.trim(),
+            code: _codeController.text.trim(),
+            description: _descController.text.trim(),
+            phase: _selectedPhase,
+          )
+        : await _projectService.createProject(
+            name: _nameController.text.trim(),
+            code: _codeController.text.trim(),
+            description: _descController.text.trim(),
+            phase: _selectedPhase,
+          );
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+      if (resp.success) {
+        widget.onSaved();
+      } else {
+        setState(() => _errorText = resp.message.isNotEmpty ? resp.message : 'Gagal menyimpan proyek');
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final bool isEdit = project != null;
+    final bool isEdit = widget.project != null;
+    final auth = context.read<AuthProvider>();
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                isEdit ? 'Ubah Proyek' : 'Buat Proyek Baru',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  isEdit ? 'Ubah Proyek' : 'Buat Proyek Baru',
+                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(LucideIcons.x),
-                onPressed: () => Navigator.pop(context),
-              )
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: TextEditingController(text: project?.name),
-            decoration: const InputDecoration(
-              labelText: 'NAMA PROYEK',
-              hintText: 'Enter project title...',
+                IconButton(
+                  icon: const Icon(LucideIcons.x),
+                  onPressed: () => Navigator.pop(context),
+                )
+              ],
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: TextEditingController(text: project?.code),
-                  decoration: const InputDecoration(
-                    labelText: 'KODE PROYEK',
-                    hintText: 'e.g. SDY-2024',
-                  ),
+            // Fix #1: Inline error message (visible inside modal)
+            if (_errorText != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.statusOverdue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.statusOverdue.withValues(alpha: 0.3)),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: TextField(
-                  enabled: false,
-                  controller: TextEditingController(text: DummyData.currentUser.name),
-                  decoration: const InputDecoration(
-                    labelText: 'PENCIPTA PROYEK',
-                    fillColor: AppColors.border,
-                  ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 16, color: AppColors.statusOverdue),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_errorText!, style: const TextStyle(color: AppColors.statusOverdue, fontSize: 13))),
+                  ],
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            initialValue: project?.phase ?? 'Planning',
-            decoration: const InputDecoration(labelText: 'TAHAPAN PROYEK'),
-            items: ['Planning', 'Execution', 'Review', 'Completed']
-                .map((phase) => DropdownMenuItem(
-                      value: phase,
-                      child: Text(phase),
-                    ))
-                .toList(),
-            onChanged: (val) {},
-          ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                label: Text.rich(TextSpan(text: 'NAMA PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
+                hintText: 'Masukkan judul proyek...',
               ),
-              const SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _codeController,
+                    decoration: const InputDecoration(
+                      label: Text.rich(TextSpan(text: 'KODE PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
+                      hintText: 'e.g. SDY-2024',
+                    ),
+                    onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
+                  ),
                 ),
-                child: const Text('Simpan'),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: TextField(
+                    enabled: false,
+                    controller: TextEditingController(text: auth.currentUser?.name ?? ''),
+                    decoration: const InputDecoration(
+                      labelText: 'PENCIPTA PROYEK',
+                      fillColor: AppColors.border,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              initialValue: _selectedPhase,
+              decoration: const InputDecoration(labelText: 'TAHAPAN PROYEK'),
+              items: _validPhases
+                  .map((phase) => DropdownMenuItem(value: phase, child: Text(phase)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedPhase = val);
+              },
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _descController,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'DESKRIPSI',
+                alignLabelWithHint: true,
               ),
-            ],
-          ),
-        ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+                ),
+                const SizedBox(width: 16),
+                ElevatedButton(
+                  onPressed: _isSaving ? null : _saveProject,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: _isSaving
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Simpan'),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,68 +1,136 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 import '../global_layout.dart';
 import '../../core/constants.dart';
-import '../../core/dummy_data.dart';
 import '../../models/models.dart';
+import '../../providers/auth_provider.dart';
+import '../../services/project_service.dart';
+import '../../services/task_service.dart';
+import '../../services/sprint_service.dart';
 import 'task_detail_screen.dart';
 import 'member_list_view.dart';
 import 'hr_dashboard_view.dart';
 import 'package:intl/intl.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
-  final Project project;
+  final int projectId;
 
-  const ProjectDetailScreen({super.key, required this.project});
+  const ProjectDetailScreen({super.key, required this.projectId});
 
   @override
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
 class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final List<TaskItem> _tasks = DummyData.tasks;
+  final ProjectService _projectService = ProjectService();
+  final TaskService _taskService = TaskService();
+  final SprintService _sprintService = SprintService();
+
+  TabController? _tabController;
+  Project? _project;
+  List<TaskItem> _tasks = [];
+  List<Sprint> _sprints = [];
+  bool _isLoading = true;
+  String _userRole = 'Anggota';
 
   @override
   void initState() {
     super.initState();
-    final role = DummyData.currentUser.role;
-    int tabCount = role == 'Human Resource' ? 1 : 2;
-    _tabController = TabController(length: tabCount, vsync: this);
+    _loadData();
   }
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
+    final auth = context.read<AuthProvider>();
+    final results = await Future.wait([
+      _projectService.getProjectDetail(widget.projectId),
+      _taskService.getTasks(widget.projectId),
+      _sprintService.getSprints(widget.projectId),
+    ]);
+
+    if (mounted) {
+      final project = results[0] as Project?;
+      final tasks = results[1] as List<TaskItem>;
+      final sprints = results[2] as List<Sprint>;
+
+      // Tentukan role user di proyek ini
+      String role = 'Anggota';
+      if (project != null && auth.currentUser != null) {
+        for (final m in project.members) {
+          if (m.userId == auth.currentUser!.id) {
+            role = m.roleName;
+            break;
+          }
+        }
+      }
+
+      // Update role di auth provider (untuk digunakan di child screens)
+      auth.setProjectRole(role);
+
+      setState(() {
+        _project = project;
+        _tasks = tasks;
+        _sprints = sprints;
+        _userRole = role;
+        _isLoading = false;
+      });
+
+      // Setup tab controller berdasarkan role
+      _tabController?.dispose();
+      int tabCount = _userRole == 'Human Resource' ? 1 : 2;
+      _tabController = TabController(length: tabCount, vsync: this);
+      setState(() {}); // trigger rebuild with new tab controller
+    }
+  }
+
   void _showTaskForm([TaskItem? task]) {
+    if (_project == null) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _TaskFormModal(task: task),
+      builder: (ctx) => _TaskFormModal(
+        task: task,
+        projectId: widget.projectId,
+        members: _project!.members,
+        onSaved: () {
+          Navigator.pop(ctx);
+          _loadData();
+        },
+      ),
     );
   }
 
-  // Menghitung minggu ke berapa dalam bulan berjalan (kalender masehi)
-  int _getWeekOfMonth() {
-    final now = DateTime.now();
-    return ((now.day - 1) ~/ 7) + 1;
-  }
-
-  // Menampilkan detail Weekly Sprint dalam BottomSheet
   void _showSprintDetail(BuildContext context) {
-    final weekNum = _getWeekOfMonth();
-    final monthYear = DateFormat('MMMM yyyy').format(DateTime.now());
+    // Cari sprint aktif (yang start_date <= now <= end_date)
+    final now = DateTime.now();
+    Sprint? activeSprint;
+    for (final s in _sprints) {
+      if (!s.startDate.isAfter(now) && !s.endDate.isBefore(now)) {
+        activeSprint = s;
+        break;
+      }
+    }
 
-    // Dummy sprint goals
-    final sprintGoals = [
-      'Penyelesaian full sistem Beyonder',
-      'Perkuat fitur keamanan Night Hawk',
-      'Penyelesaian permintaan client dari Demonness Grub',
-      'Review dan QA seluruh modul yang sudah selesai',
-    ];
+    // Jika tidak ada sprint aktif, ambil yang terbaru
+    activeSprint ??= _sprints.isNotEmpty ? _sprints.first : null;
+
+    if (activeSprint == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Belum ada sprint di proyek ini')),
+      );
+      return;
+    }
+
+    final weekNum = ((now.day - 1) ~/ 7) + 1;
 
     showModalBottomSheet(
       context: context,
@@ -72,7 +140,10 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
           color: Theme.of(context).scaffoldBackgroundColor,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(context).padding.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +153,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
               children: [
                 Expanded(
                   child: Text(
-                    'Weekly Sprint Minggu Ke-$weekNum',
+                    activeSprint!.name ?? 'Weekly Sprint Minggu Ke-$weekNum',
                     style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -93,7 +164,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
               ],
             ),
             Text(
-              monthYear,
+              '${DateFormat('dd MMM').format(activeSprint.startDate)} - ${DateFormat('dd MMM yyyy').format(activeSprint.endDate)}',
               style: const TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 20),
@@ -102,37 +173,55 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 12),
-            ...sprintGoals.asMap().entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '${entry.key + 1}',
-                        style: const TextStyle(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+            if (activeSprint.goals.isEmpty)
+              const Text('Belum ada goals', style: TextStyle(color: AppColors.textSecondary))
+            else
+              ...activeSprint.goals.asMap().entries.map((entry) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 24, height: 24,
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          '${entry.key + 1}',
+                          style: const TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold, fontSize: 12),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(entry.value, style: const TextStyle(fontSize: 14)),
-                    ),
-                  ],
-                ),
-              );
-            }),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(entry.value.text, style: const TextStyle(fontSize: 14))),
+                    ],
+                  ),
+                );
+              }),
+            const SizedBox(height: 16),
+            const Text(
+              'Weekly Plan',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 12),
+            if (activeSprint.weeklyPlans.isEmpty)
+              const Text('Belum ada weekly plan', style: TextStyle(color: AppColors.textSecondary))
+            else
+              ...activeSprint.weeklyPlans.expand((wp) => wp.planningPoin).map((point) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(LucideIcons.checkCircle, size: 16, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(point, style: const TextStyle(fontSize: 14))),
+                    ],
+                  ),
+                );
+              }),
             const SizedBox(height: 8),
           ],
         ),
@@ -142,6 +231,22 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading || _tabController == null) {
+      return GlobalLayout(
+        title: 'Detail Proyek',
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_project == null) {
+      return GlobalLayout(
+        title: 'Detail Proyek',
+        child: const Center(child: Text('Proyek tidak ditemukan')),
+      );
+    }
+
+    final weekNum = ((DateTime.now().day - 1) ~/ 7) + 1;
+
     return GlobalLayout(
       title: 'Detail Proyek',
       child: Column(
@@ -163,12 +268,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                       children: [
                         Expanded(
                           child: Text(
-                            widget.project.name,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            _project!.name,
+                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                         ),
                         Container(
@@ -178,34 +279,28 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
-                            widget.project.status,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            _project!.status,
+                            style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.project.code,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 14,
-                      ),
+                      _project!.code.isNotEmpty ? _project!.code : '—',
+                      style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 14),
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      widget.project.description,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 14,
+                    if (_project!.description.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _project!.description,
+                        style: const TextStyle(color: Colors.white, fontSize: 14),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
                     const SizedBox(height: 16),
-                    // Weekly Sprint (tappable) - posisi di bawah deskripsi
+                    // Weekly Sprint (tappable)
                     InkWell(
                       onTap: () => _showSprintDetail(context),
                       borderRadius: BorderRadius.circular(12),
@@ -222,7 +317,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'Weekly Sprint: Minggu Ke-${_getWeekOfMonth()} ${DateFormat('MMMM yyyy').format(DateTime.now())}',
+                                'Weekly Sprint: Minggu Ke-$weekNum ${DateFormat('MMMM yyyy').format(DateTime.now())}',
                                 style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -243,7 +338,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
             labelColor: AppColors.primary,
             unselectedLabelColor: AppColors.textSecondary,
             indicatorColor: AppColors.primary,
-            tabs: DummyData.currentUser.role == 'Human Resource'
+            tabs: _userRole == 'Human Resource'
                 ? const [Tab(text: 'HR View')]
                 : const [Tab(text: 'Daftar Tugas'), Tab(text: 'Anggota')],
           ),
@@ -252,11 +347,11 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: DummyData.currentUser.role == 'Human Resource'
-                  ? const [HRDashboardView()]
+              children: _userRole == 'Human Resource'
+                  ? [HRDashboardView(projectId: widget.projectId)]
                   : [
                       _buildTaskList(),
-                      const MemberListView(),
+                      MemberListView(projectId: widget.projectId, members: _project!.members, userRole: _userRole),
                     ],
             ),
           ),
@@ -266,58 +361,89 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
   }
 
   Widget _buildTaskList() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    final isLeaderOrAsisten = _userRole == 'Pemimpin Projek' || _userRole == 'Asisten' || _userRole == 'Pemimpin Proyek';
+    final searchController = TextEditingController();
+
+    return StatefulBuilder(
+      builder: (context, setLocalState) {
+        List<TaskItem> filtered = _tasks;
+        if (searchController.text.isNotEmpty) {
+          filtered = _tasks.where((t) =>
+            t.name.toLowerCase().contains(searchController.text.toLowerCase())
+          ).toList();
+        }
+
+        // TODO: [TUGAS REKAN] Task 9 - Tambahkan logika menggunakan .sort() pada list 'filtered' di bawah ini untuk mengurutkan tugas berdasarkan deadline terdekat.
+
+
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Cari tugas...',
-                    prefixIcon: const Icon(LucideIcons.search),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 0),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Cari tugas...',
+                        prefixIcon: const Icon(LucideIcons.search),
+                        contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                      ),
+                      onChanged: (_) => setLocalState(() {}),
+                    ),
                   ),
-                ),
+                  if (isLeaderOrAsisten) ...[
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: _showTaskForm,
+                      style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16)),
+                      child: const Icon(LucideIcons.plus),
+                    ),
+                  ],
+                ],
               ),
-              if (DummyData.currentUser.role == 'Pemimpin Proyek' || 
-                  DummyData.currentUser.role == 'Asisten') ...[
-                const SizedBox(width: 12),
-                ElevatedButton(
-                  onPressed: _showTaskForm,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                  ),
-                  child: const Icon(LucideIcons.plus),
-                ),
-              ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(LucideIcons.clipboardList, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
+                            const SizedBox(height: 16),
+                            const Text('Belum ada tugas', style: TextStyle(color: AppColors.textSecondary)),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadData,
+                        child: ListView.separated(
+                          itemCount: filtered.length,
+                          separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+                          itemBuilder: (ctx, i) {
+                            final task = filtered[i];
+                            return _TaskCard(
+                              task: task,
+                              onTap: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => TaskDetailScreen(taskId: task.id, projectId: widget.projectId),
+                                  ),
+                                );
+                                _loadData(); // Refresh saat kembali
+                              },
+                            );
+                          },
+                        ),
+                      ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.separated(
-              itemCount: _tasks.length,
-              separatorBuilder: (ctx, i) => const SizedBox(height: 12),
-              itemBuilder: (ctx, i) {
-                final task = _tasks[i];
-                return _TaskCard(
-                  task: task,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => TaskDetailScreen(task: task),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -330,9 +456,9 @@ class _TaskCard extends StatelessWidget {
 
   Color _getStatusColor(String status) {
     switch (status) {
-      case 'Done': return AppColors.statusDone;
-      case 'In Progress': return AppColors.statusInProgress;
-      case 'Review': return AppColors.primary;
+      case 'DONE': return AppColors.statusDone;
+      case 'IN_PROGRESS': return AppColors.statusInProgress;
+      case 'REVIEW': return AppColors.primary;
       default: return AppColors.textSecondary;
     }
   }
@@ -359,13 +485,7 @@ class _TaskCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
-                  child: Text(
-                    task.name,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: Text(task.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -374,12 +494,8 @@ class _TaskCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    task.status,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: statusColor,
-                    ),
+                    task.displayStatus,
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: statusColor),
                   ),
                 ),
               ],
@@ -388,20 +504,15 @@ class _TaskCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  task.code,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                ),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.calendar, size: 14, color: AppColors.textSecondary),
-                    const SizedBox(width: 4),
-                    Text(
-                      formatter.format(task.deadline),
-                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
+                Text(task.label ?? '—', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (task.deadline != null)
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.calendar, size: 14, color: AppColors.textSecondary),
+                      const SizedBox(width: 4),
+                      Text(formatter.format(task.deadline!), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                    ],
+                  ),
               ],
             ),
           ],
@@ -413,25 +524,84 @@ class _TaskCard extends StatelessWidget {
 
 class _TaskFormModal extends StatefulWidget {
   final TaskItem? task;
-  const _TaskFormModal({this.task});
+  final int projectId;
+  final List<ProjectMember> members;
+  final VoidCallback onSaved;
+
+  const _TaskFormModal({
+    this.task,
+    required this.projectId,
+    required this.members,
+    required this.onSaved,
+  });
 
   @override
   State<_TaskFormModal> createState() => _TaskFormModalState();
 }
 
 class _TaskFormModalState extends State<_TaskFormModal> {
-  // List PIC yang dipilih (multiple value)
-  late List<AppUser> _selectedPics;
+  final TaskService _taskService = TaskService();
+  late TextEditingController _nameController;
+  late TextEditingController _weightController;
+  late TextEditingController _deadlineController;
+  late TextEditingController _descController;
+  String _selectedLabel = 'Desain';
+  String _selectedPriority = 'Sedang';
+  List<AppUser> _selectedPics = [];
+  DateTime? _selectedDeadline;
+  bool _isSaving = false;
+  String? _errorText; // Fix #1: inline error instead of SnackBar
+
+  static const _validLabels = ['Analisa', 'Backend', 'Desain', 'Evaluasi', 'Frontend', 'Riset', 'Uji Coba', 'Lainnya'];
+  static const _validPriorities = ['Rendah', 'Sedang', 'Tinggi'];
 
   @override
   void initState() {
     super.initState();
-    // Jika mode edit, isi PIC dari task yang ada; jika baru, kosong
-    _selectedPics = widget.task != null ? [widget.task!.pic] : [];
+    _nameController = TextEditingController(text: widget.task?.name);
+    _weightController = TextEditingController(text: widget.task?.weight.toString() ?? '');
+    _deadlineController = TextEditingController(
+      text: widget.task?.deadline != null ? DateFormat('dd/MM/yyyy').format(widget.task!.deadline!) : '',
+    );
+    _descController = TextEditingController(text: widget.task?.description);
+    _selectedLabel = _validLabels.contains(widget.task?.label) ? widget.task!.label! : 'Desain';
+    _selectedPriority = _validPriorities.contains(widget.task?.priority) ? widget.task!.priority! : 'Sedang';
+    _selectedDeadline = widget.task?.deadline;
+
+    if (widget.task != null && widget.task!.picUsers.isNotEmpty) {
+      _selectedPics = List.from(widget.task!.picUsers);
+    } else if (widget.task?.pic != null) {
+      _selectedPics = [widget.task!.pic!];
+    }
   }
 
-  // Membuka bottom sheet berisi checkbox untuk multi-select PIC
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _weightController.dispose();
+    _deadlineController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDeadline() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDeadline ?? DateTime.now().add(const Duration(days: 7)),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedDeadline = picked;
+        _deadlineController.text = DateFormat('dd/MM/yyyy').format(picked);
+      });
+    }
+  }
+
   void _showPicSelector() {
+    final activeMembers = widget.members.where((m) => m.statusMember && m.user != null).toList();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -448,7 +618,10 @@ class _TaskFormModalState extends State<_TaskFormModal> {
                   color: Theme.of(context).scaffoldBackgroundColor,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-                padding: const EdgeInsets.all(24),
+                padding: EdgeInsets.only(
+                  left: 24, right: 24, top: 24,
+                  bottom: MediaQuery.of(context).padding.bottom + 24,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -463,15 +636,16 @@ class _TaskFormModalState extends State<_TaskFormModal> {
                     Expanded(
                       child: ListView.builder(
                         controller: controller,
-                        itemCount: DummyData.allUsers.length,
+                        itemCount: activeMembers.length,
                         itemBuilder: (context, index) {
-                          final user = DummyData.allUsers[index];
+                          final member = activeMembers[index];
+                          final user = member.user!;
                           final isChecked = _selectedPics.any((u) => u.id == user.id);
                           return CheckboxListTile(
                             value: isChecked,
                             activeColor: AppColors.primary,
                             title: Text(user.name, style: const TextStyle(fontSize: 14)),
-                            subtitle: Text(user.role, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            subtitle: Text(member.roleName, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                             secondary: CircleAvatar(
                               radius: 16,
                               backgroundColor: AppColors.primary.withValues(alpha: 0.1),
@@ -485,17 +659,14 @@ class _TaskFormModalState extends State<_TaskFormModal> {
                                   _selectedPics.removeWhere((u) => u.id == user.id);
                                 }
                               });
-                              setState(() {}); // Update parent juga
+                              setState(() {});
                             },
                           );
                         },
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Selesai'),
-                    ),
+                    ElevatedButton(onPressed: () => Navigator.pop(ctx), child: const Text('Selesai')),
                   ],
                 ),
               ),
@@ -506,131 +677,174 @@ class _TaskFormModalState extends State<_TaskFormModal> {
     );
   }
 
+  Future<void> _saveTask() async {
+    if (_nameController.text.trim().isEmpty) {
+      setState(() => _errorText = 'Nama tugas wajib diisi');
+      return;
+    }
+    if (_selectedPics.isEmpty) {
+      setState(() => _errorText = 'Minimal pilih 1 PIC');
+      return;
+    }
+
+    setState(() {
+      _errorText = null;
+      _isSaving = true;
+    });
+
+    final isEdit = widget.task != null;
+    final resp = isEdit
+        ? await _taskService.updateTask(
+            widget.task!.id,
+            name: _nameController.text.trim(),
+            description: _descController.text.trim(),
+            deadline: _selectedDeadline,
+            weight: int.tryParse(_weightController.text) ?? 1,
+            label: _selectedLabel,
+            priority: _selectedPriority,
+            picIds: _selectedPics.map((u) => u.id).toList(),
+          )
+        : await _taskService.createTask(
+            projectId: widget.projectId,
+            name: _nameController.text.trim(),
+            description: _descController.text.trim(),
+            deadline: _selectedDeadline,
+            weight: int.tryParse(_weightController.text) ?? 1,
+            label: _selectedLabel,
+            priority: _selectedPriority,
+            picIds: _selectedPics.map((u) => u.id).toList(),
+          );
+
+    if (mounted) {
+      setState(() => _isSaving = false);
+      if (resp.success) {
+        widget.onSaved();
+      } else {
+        setState(() => _errorText = resp.message.isNotEmpty ? resp.message : 'Gagal menyimpan tugas');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEdit = widget.task != null;
-    final startDateText = widget.task != null
-        ? DateFormat('dd/MM/yyyy').format(widget.task!.startDate)
-        : DateFormat('dd/MM/yyyy').format(DateTime.now());
 
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: EdgeInsets.only(
-        left: 24,
-        right: 24,
-        top: 24,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        left: 24, right: 24, top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + MediaQuery.of(context).padding.bottom + 24,
       ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  isEdit ? 'Ubah Tugas' : 'Buat Tugas Baru',
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                IconButton(
-                  icon: const Icon(LucideIcons.x),
-                  onPressed: () => Navigator.pop(context),
-                )
+                Text(isEdit ? 'Ubah Tugas' : 'Buat Tugas Baru', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
               ],
             ),
+            // Fix #1: Inline error message (visible inside modal)
+            if (_errorText != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.statusOverdue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.statusOverdue.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(LucideIcons.alertCircle, size: 16, color: AppColors.statusOverdue),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(_errorText!, style: const TextStyle(color: AppColors.statusOverdue, fontSize: 13))),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
-
-            // Nama Tugas
             TextField(
-              controller: TextEditingController(text: widget.task?.name),
-              decoration: const InputDecoration(labelText: 'Nama Tugas'),
+              controller: _nameController,
+              decoration: const InputDecoration(label: Text.rich(TextSpan(text: 'Nama Tugas ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))]))),
+              onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
             ),
             const SizedBox(height: 16),
-
-            // Bobot & Label (Grid 2 kolom)
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     keyboardType: TextInputType.number,
-                    controller: TextEditingController(
-                      text: widget.task?.weight.toString() ?? '',
-                    ),
+                    controller: _weightController,
                     decoration: const InputDecoration(labelText: 'Bobot'),
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    initialValue: widget.task?.label ?? 'Design',
+                    initialValue: _selectedLabel,
                     decoration: const InputDecoration(labelText: 'Label'),
-                    items: ['Design', 'Backend', 'Frontend', 'Research']
-                        .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                    items: _validLabels
+                        .map((label) => DropdownMenuItem(value: label, child: Text(label, style: const TextStyle(fontSize: 13))))
                         .toList(),
-                    onChanged: (val) {},
+                    onChanged: (val) { if (val != null) setState(() => _selectedLabel = val); },
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-
-            // Tanggal Mulai (auto-filled, read-only) & Deadline
             Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    enabled: false,
-                    controller: TextEditingController(text: startDateText),
-                    decoration: const InputDecoration(
-                      labelText: 'Tanggal Mulai',
-                      suffixIcon: Icon(LucideIcons.calendar),
-                    ),
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _selectedPriority,
+                    decoration: const InputDecoration(labelText: 'Prioritas'),
+                    items: _validPriorities
+                        .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                        .toList(),
+                    onChanged: (val) { if (val != null) setState(() => _selectedPriority = val); },
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: TextField(
-                    controller: TextEditingController(
-                      text: widget.task != null
-                          ? DateFormat('dd/MM/yyyy').format(widget.task!.deadline)
-                          : '',
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Deadline Tugas',
-                      hintText: 'dd/mm/yyyy',
-                      suffixIcon: Icon(LucideIcons.calendar),
+                  child: GestureDetector(
+                    onTap: _pickDeadline,
+                    child: AbsorbPointer(
+                      child: TextField(
+                        controller: _deadlineController,
+                        decoration: const InputDecoration(
+                          labelText: 'Deadline',
+                          suffixIcon: Icon(LucideIcons.calendar),
+                        ),
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-
-            // PIC (Dropdown Multi-select yang kompak)
             InkWell(
-              onTap: () => _showPicSelector(),
+              onTap: _showPicSelector,
               borderRadius: BorderRadius.circular(12),
               child: InputDecorator(
                 decoration: const InputDecoration(
-                  labelText: 'PIC (Penanggung Jawab)',
+                  label: Text.rich(TextSpan(text: 'PIC (Penanggung Jawab) ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
                   suffixIcon: Icon(LucideIcons.chevronDown),
                 ),
                 child: _selectedPics.isEmpty
                     ? const Text('Pilih anggota...', style: TextStyle(color: AppColors.textSecondary, fontSize: 14))
                     : Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
+                        spacing: 6, runSpacing: 4,
                         children: _selectedPics.map((u) => Chip(
                           label: Text(u.name, style: const TextStyle(fontSize: 12)),
                           deleteIcon: const Icon(Icons.close, size: 14),
-                          onDeleted: () {
-                            setState(() => _selectedPics.removeWhere((p) => p.id == u.id));
-                          },
+                          onDeleted: () => setState(() => _selectedPics.removeWhere((p) => p.id == u.id)),
                           visualDensity: VisualDensity.compact,
                           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         )).toList(),
@@ -638,52 +852,22 @@ class _TaskFormModalState extends State<_TaskFormModal> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Deskripsi
             TextField(
-              controller: TextEditingController(text: widget.task?.description),
+              controller: _descController,
               maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Deskripsi',
-                alignLabelWithHint: true,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Lampiran
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                border: Border.all(color: AppColors.border),
-                borderRadius: BorderRadius.circular(12),
-                color: AppColors.background,
-              ),
-              child: const Column(
-                children: [
-                  Icon(LucideIcons.uploadCloud, size: 32, color: AppColors.primary),
-                  SizedBox(height: 8),
-                  Text(
-                    'Tarik & Lepas file di sini atau klik untuk mengunggah file',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                  ),
-                ],
-              ),
+              decoration: const InputDecoration(labelText: 'Deskripsi', alignLabelWithHint: true),
             ),
             const SizedBox(height: 24),
-
-            // Tombol aksi
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal'),
-                ),
+                OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
                 const SizedBox(width: 16),
                 ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: Text(isEdit ? 'Simpan' : 'Buat Tugas'),
+                  onPressed: _isSaving ? null : _saveTask,
+                  child: _isSaving
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Text(isEdit ? 'Simpan' : 'Buat Tugas'),
                 ),
               ],
             ),

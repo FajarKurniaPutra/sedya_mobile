@@ -31,10 +31,27 @@ class GlobalLayout extends StatelessWidget {
               centerTitle: false,
               actions: [
                 IconButton(
+                  icon: const Icon(LucideIcons.bell),
+                  onPressed: () {
+                    final currentRoute = ModalRoute.of(context)?.settings.name;
+                    if (currentRoute == '/notifications') return;
+                    if (currentRoute == '/settings') {
+                      Navigator.pushReplacementNamed(context, '/notifications');
+                    } else {
+                      Navigator.pushNamed(context, '/notifications');
+                    }
+                  },
+                ),
+                IconButton(
                   icon: const Icon(LucideIcons.settings),
                   onPressed: () {
-                    // Navigate to settings (Halaman Pengaturan)
-                    Navigator.pushNamed(context, '/settings');
+                    final currentRoute = ModalRoute.of(context)?.settings.name;
+                    if (currentRoute == '/settings') return;
+                    if (currentRoute == '/notifications') {
+                      Navigator.pushReplacementNamed(context, '/settings');
+                    } else {
+                      Navigator.pushNamed(context, '/settings');
+                    }
                   },
                 ),
               ],

@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "446018190878",
+    "project_id": "sedya-c27aa",
+    "storage_bucket": "sedya-c27aa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:446018190878:android:a8dd0e7e660be40699380f",
+        "android_client_info": {
+          "package_name": "com.example.sedya_mobile"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "446018190878-hapn3j6keik1dnlcne2tm158ajkns144.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.sedya_mobile",
+            "certificate_hash": "67a4d0ad765abbf074aecb2b1fc58946a34831a8"
+          }
+        },
+        {
+          "client_id": "446018190878-c5bags84kecpsfakd4bf2sgrbitaccb6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAZqSJYEI5E0SNSz-CVEMhGFPQVQWS-6FI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "446018190878-c5bags84kecpsfakd4bf2sgrbitaccb6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "446018190878-nhq0rjsifl11t44p8ma0t9g04jgtuhq0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.sedyaMobile"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

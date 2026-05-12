@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../global_layout.dart';
 import '../../core/constants.dart';
-import '../../core/dummy_data.dart';
-
+import '../../providers/auth_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
+  bool _isGoogleLoading = false;
+  String? _errorMessage;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
 
   @override
   void initState() {
@@ -35,10 +42,51 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
-  void _handleLogin() {
-    // Navigate to projects screen
-    Navigator.pushReplacementNamed(context, '/projects');
+  /// Login via Google Sign-In SDK → kirim ke backend Laravel
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isGoogleLoading = true;
+      _errorMessage = null;
+    });
+
+    // Capture reference before async gap
+    final auth = context.read<AuthProvider>();
+
+    try {
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        // User membatalkan login
+        if (mounted) setState(() => _isGoogleLoading = false);
+        return;
+      }
+
+      final error = await auth.loginWithGoogle(
+        email: googleUser.email,
+        username: googleUser.displayName ?? googleUser.email.split('@')[0],
+        googleId: googleUser.id,
+        photoUrl: googleUser.photoUrl,
+      );
+
+      if (!mounted) return;
+
+      if (error != null) {
+        setState(() => _errorMessage = error);
+      } else {
+        Navigator.pushReplacementNamed(context, '/projects');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = 'Login gagal: ${e.toString()}');
+      }
+    }
+
+    if (mounted) {
+      setState(() => _isGoogleLoading = false);
+    }
   }
+
+  // Menghapus demo login method
 
   @override
   Widget build(BuildContext context) {
@@ -77,86 +125,43 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ),
               ),
               const SizedBox(height: 48),
-              // Dropdown pilih akun demo (single value)
-              DropdownButtonFormField<String>(
-                initialValue: DummyData.currentUser.id,
-                decoration: const InputDecoration(
-                  labelText: 'Pilih Akun Demo',
-                  prefixIcon: Icon(LucideIcons.user),
-                ),
-                isExpanded: true,
-                // Tampilan yang muncul saat dropdown TERBUKA (menu items)
-                items: DummyData.allUsers.map((user) {
-                  return DropdownMenuItem<String>(
-                    value: user.id,
-                    child: Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 14,
-                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                          child: Text(user.name[0], style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.primary)),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                              Text(user.role, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-                // Tampilan yang muncul saat dropdown TERTUTUP (selected)
-                selectedItemBuilder: (context) {
-                  return DummyData.allUsers.map((user) {
-                    return Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        '${user.name} — ${user.role}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    );
-                  }).toList();
-                },
-                onChanged: (val) {
-                  if (val != null) {
-                    setState(() {
-                      DummyData.currentUser = DummyData.allUsers.firstWhere((u) => u.id == val);
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _handleLogin,
-                child: const Text('Login'),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  const Expanded(child: Divider(color: AppColors.border)),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Text(
-                      'atau',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
+
+              // Error message
+              if (_errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.statusOverdue.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.statusOverdue.withValues(alpha: 0.3)),
                   ),
-                  const Expanded(child: Divider(color: AppColors.border)),
-                ],
-              ),
+                  child: Row(
+                    children: [
+                      const Icon(LucideIcons.alertCircle, color: AppColors.statusOverdue, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: AppColors.statusOverdue, fontSize: 13),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // Google Sign-In button (Primary)
+              _isGoogleLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : OutlinedButton.icon(
+                      onPressed: _handleGoogleLogin,
+                      icon: const Icon(LucideIcons.mail, color: AppColors.textSecondary),
+                      label: const Text('Login dengan Google'),
+                    ),
               const SizedBox(height: 24),
-              OutlinedButton.icon(
-                onPressed: _handleLogin, // mock action
-                icon: const Icon(LucideIcons.mail, color: AppColors.textSecondary),
-                label: const Text('Login dengan Google'),
-              ),
+
+              // TODO: [TUGAS REKAN] Task 6 - Tampilkan pesan ScaffoldMessenger bertuliskan "Selamat Datang, [Nama User]" saat proses login sukses (sebelum Navigator.pushReplacementNamed).
             ],
           ),
         ),
