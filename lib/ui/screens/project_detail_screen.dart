@@ -83,11 +83,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
         _isLoading = false;
       });
 
-      // Setup tab controller berdasarkan role
-      _tabController?.dispose();
+      // Setup tab controller berdasarkan role HANYA jika belum ada atau berganti role
       int tabCount = _userRole == 'Human Resource' ? 1 : 2;
-      _tabController = TabController(length: tabCount, vsync: this);
-      setState(() {}); // trigger rebuild with new tab controller
+      if (_tabController == null || _tabController!.length != tabCount) {
+        _tabController?.dispose();
+        _tabController = TabController(length: tabCount, vsync: this);
+      }
+      
+      setState(() {}); // trigger rebuild
     }
   }
 
@@ -433,7 +436,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                                     builder: (_) => TaskDetailScreen(taskId: task.id, projectId: widget.projectId),
                                   ),
                                 );
-                                _loadData(); // Refresh saat kembali
+                                // Delay refresh until after the pop animation completes
+                                // to avoid triggering notifyListeners on a dying widget
+                                if (mounted) {
+                                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                                    if (mounted) _loadData();
+                                  });
+                                }
                               },
                             );
                           },

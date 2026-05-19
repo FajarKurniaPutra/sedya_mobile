@@ -1,8 +1,19 @@
 /// Konfigurasi koneksi API backend Sedya
 class ApiConfig {
-  // Gunakan 10.0.2.2 untuk Android emulator (alias ke localhost host machine)
-  // Gunakan localhost atau IP lokal untuk iOS simulator / device fisik
-  static const String baseUrl = 'http://10.66.66.56:8000';
+  /// Ubah menjadi [true] jika aplikasi akan di-build untuk Rilis/Production.
+  /// Ubah menjadi [false] untuk pengembangan (Development) lokal.
+  static const bool isProduction = true; 
+
+  // URL Lokal (Development)
+  // Gunakan 10.0.2.2 untuk Android emulator, atau IP Wi-Fi untuk device fisik
+  static const String _localUrl = 'http://192.168.1.34:8000';
+  
+  // URL Hosting (Production)
+  // TODO: Ganti dengan URL hosting sedya_web asli Anda (misal: https://api.namadomain.com)
+  static const String _productionUrl = 'https://sedya.up.railway.app';
+
+  // Base URL Otomatis
+  static const String baseUrl = isProduction ? _productionUrl : _localUrl;
   static const String apiUrl = '$baseUrl/api';
 
   // Timeout dalam detik

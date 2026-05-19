@@ -84,6 +84,11 @@ class ProjectService {
     });
   }
 
+  /// Hapus project
+  Future<ApiResponse> deleteProject(int projectId) async {
+    return _api.delete('/projects/$projectId');
+  }
+
   /// Toggle status member (aktif/nonaktif)
   Future<ApiResponse> toggleMemberStatus(int projectId, int memberId) async {
     return _api.put('/projects/$projectId/members/$memberId/toggle-status');

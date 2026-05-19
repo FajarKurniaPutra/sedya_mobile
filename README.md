@@ -56,6 +56,13 @@ lib/
 
 ## 📈 Log Perubahan & Progress (Changelog)
 
+### **Versi 1.0.0-rc.1 (Sinkronisasi Backend & Fix Lifecycle)**
+- **Pemisahan Environment (Local & Production)**: Mengonfigurasi ulang `api_config.dart` untuk mempermudah peralihan rute API dari *Local Development* ke *Production Hosting* (Railway) tanpa bentrok.
+- **Integrasi FCM Token**: Menambahkan *service* `registerFcmToken` dan `unregisterFcmToken` di sisi *mobile* untuk melengkapi sistem *Push Notification non-blocking* di backend.
+- **Pembaruan Service API**: Mengimplementasikan *Soft-Delete Project* via `ProjectService`, dan menambahkan layanan riwayat terbaru dengan model dan service `ActivityLog`.
+- **Perbaikan Bug Lifecycle Kritis (Red Screen Fix)**: Memperbaiki *memory leak* pada `TabController` di halaman *Project Detail* yang menyebabkan rentetan *assertion error* (`_dependents.isEmpty is not true` dan `Null check operator`), serta membetulkan aturan `context.watch` pada `Provider`.
+- **Penggantian Logo**: Mengintegrasikan aset gambar logo Sedya yang resmi menggantikan ikon *default* Flutter.
+
 ### **Versi 1.0.0-beta.3 (Bug Fix Round 3 - Stabilitas & UI/UX)**
 - **UI/UX Modal**: Memperbaiki masalah validasi form di mana pesan *SnackBar* tertutup oleh modal form. Sekarang digantikan dengan *Inline Error Banner* yang lebih modern.
 - **Keamanan Crash (Red Screen)**: Mencegah error *async gap* dan *widget disposal* yang sering menyebabkan layar merah (red screen of death) ketika pengguna menutup halaman Detail Tugas secara cepat.

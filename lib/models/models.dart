@@ -541,3 +541,36 @@ DateTime? _parseDateTime(dynamic value) {
     return null;
   }
 }
+
+/// Model ActivityLog — mapping ke tabel `activity_logs`
+class ActivityLog {
+  final int id;
+  final int userId;
+  final String action;
+  final String targetType;
+  final int targetId;
+  final DateTime? createdAt;
+  final AppUser? user;
+
+  ActivityLog({
+    required this.id,
+    required this.userId,
+    required this.action,
+    required this.targetType,
+    required this.targetId,
+    this.createdAt,
+    this.user,
+  });
+
+  factory ActivityLog.fromJson(Map<String, dynamic> json) {
+    return ActivityLog(
+      id: _toInt(json['id']),
+      userId: _toInt(json['user_id']),
+      action: json['action'] ?? '',
+      targetType: json['target_type'] ?? '',
+      targetId: _toInt(json['target_id']),
+      createdAt: _parseDateTime(json['created_at']),
+      user: json['user'] != null ? AppUser.fromJson(json['user']) : null,
+    );
+  }
+}

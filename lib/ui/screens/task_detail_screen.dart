@@ -25,6 +25,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   String _currentStatus = 'TODO';
   final TextEditingController _chatController = TextEditingController();
   bool _isSendingNote = false;
+  bool _isPopping = false; // Guard: prevent rebuild during pop
 
   @override
   void initState() {
@@ -38,12 +39,17 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     super.dispose();
   }
 
+  /// Safe setState that checks mounted AND not-popping
+  void _safeSetState(VoidCallback fn) {
+    if (mounted && !_isPopping) setState(fn);
+  }
+
   Future<void> _loadTask() async {
-    if (!mounted) return;
-    setState(() => _isLoading = true);
+    if (!mounted || _isPopping) return;
+    _safeSetState(() => _isLoading = true);
     final task = await _taskService.getTaskDetail(widget.taskId);
-    if (mounted) {
-      setState(() {
+    if (mounted && !_isPopping) {
+      _safeSetState(() {
         _task = task;
         _currentStatus = task?.status ?? 'TODO';
         _isLoading = false;
@@ -60,48 +66,79 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
-  Future<void> _updateStatus(String newStatus) async {
-    final backendStatus = TaskItem.toBackendStatus(newStatus);
+  String _getDisplayStatus(String backendStatus) {
+    switch (backendStatus) {
+      case 'IN_PROGRESS': return 'In Progress';
+      case 'REVIEW': return 'Review';
+      case 'DONE': return 'Done';
+      default: return 'Not Started';
+    }
+  }
+
+  Future<void> _updateStatus(String newDisplayStatus) async {
+    final backendStatus = TaskItem.toBackendStatus(newDisplayStatus);
     final resp = await _taskService.updateStatus(widget.taskId, backendStatus);
-    if (mounted && resp.success) {
-      setState(() => _currentStatus = backendStatus);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal mengubah status')),
-      );
+    if (mounted && !_isPopping) {
+      if (resp.success) {
+        _safeSetState(() => _currentStatus = backendStatus);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal mengubah status')),
+        );
+      }
     }
   }
 
   Future<void> _sendNote() async {
     if (_chatController.text.trim().isEmpty) return;
-    setState(() => _isSendingNote = true);
+    _safeSetState(() => _isSendingNote = true);
 
     final resp = await _taskService.addNote(widget.taskId, _chatController.text.trim());
-    if (mounted && resp.success) {
-      _chatController.clear();
-      await _loadTask();
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal mengirim catatan')),
-      );
+    if (mounted && !_isPopping) {
+      if (resp.success) {
+        _chatController.clear();
+        await _loadTask();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal mengirim catatan')),
+        );
+      }
     }
 
-    if (mounted) setState(() => _isSendingNote = false);
+    _safeSetState(() => _isSendingNote = false);
   }
 
   Future<void> _deleteTask() async {
     final resp = await _taskService.deleteTask(widget.taskId);
-    if (mounted && resp.success) {
-      Navigator.pop(context);
-    } else if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal menghapus tugas')),
-      );
+    if (mounted && !_isPopping) {
+      if (resp.success) {
+        _safePop();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal menghapus tugas')),
+        );
+      }
     }
+  }
+
+  /// Safe pop: set guard flag BEFORE calling Navigator.pop to prevent any
+  /// rebuild from crashing the widget during the pop animation.
+  void _safePop() {
+    if (_isPopping) return;
+    _isPopping = true;
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Early return: if we're in the process of popping, show a minimal safe widget
+    if (_isPopping) {
+      return GlobalLayout(
+        title: 'Detail Tugas',
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
     if (_isLoading) {
       return GlobalLayout(
         title: 'Detail Tugas',
@@ -117,8 +154,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       );
     }
 
-    // Use context.read instead of context.watch to avoid provider dependency issues on dispose
-    final auth = context.read<AuthProvider>();
+    // Capture provider values ONCE at top, no subscription
+    final auth = context.watch<AuthProvider>();
     final role = auth.userRole;
     final currentUserId = auth.currentUser?.id;
     final isLeaderOrAsisten = role == 'Pemimpin Projek' || role == 'Asisten' || role == 'Pemimpin Proyek';
@@ -126,9 +163,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final canChangeStatus = isLeaderOrAsisten || isPIC;
     final statusColor = _getStatusColor(_currentStatus);
     final DateFormat formatter = DateFormat('dd MMM yyyy');
-    final displayStatus = TaskItem(
-      id: 0, projectId: 0, name: '', status: _currentStatus,
-    ).displayStatus;
+    final displayStatus = _getDisplayStatus(_currentStatus);
 
     return GlobalLayout(
       title: 'Detail Tugas',
@@ -306,7 +341,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           )
                         ],
                       ),
-                    // Fix #5: Description always shown (even if empty, show placeholder)
+                    // Description always shown
                     const SizedBox(height: 24),
                     const Text('Deskripsi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                     const SizedBox(height: 8),
@@ -466,7 +501,7 @@ class _TaskEditModalState extends State<_TaskEditModal> {
   List<AppUser> _selectedPics = [];
   DateTime? _selectedDeadline;
   bool _isSaving = false;
-  String? _errorText; // Fix #1: inline error instead of SnackBar
+  String? _errorText;
 
   static const _validLabels = ['Analisa', 'Backend', 'Desain', 'Evaluasi', 'Frontend', 'Riset', 'Uji Coba', 'Lainnya'];
   static const _validPriorities = ['Rendah', 'Sedang', 'Tinggi'];
@@ -567,7 +602,7 @@ class _TaskEditModalState extends State<_TaskEditModal> {
                 IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(context)),
               ],
             ),
-            // Fix #1: Inline error message
+            // Inline error message
             if (_errorText != null) ...[
               const SizedBox(height: 8),
               Container(

@@ -99,10 +99,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(
-                LucideIcons.boxes,
-                size: 64,
-                color: AppColors.primary,
+              Image.asset(
+                'assets/images/logo.png',
+                height: 100,
+                fit: BoxFit.contain,
               ),
               const SizedBox(height: 16),
               const Text(

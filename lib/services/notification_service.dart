@@ -30,4 +30,17 @@ class NotificationService {
   Future<ApiResponse> markAllAsRead() async {
     return _api.put('/notifications/read-all');
   }
+
+  /// Registrasi FCM Token
+  Future<ApiResponse> registerFcmToken(String token, {String deviceType = 'android'}) async {
+    return _api.post('/fcm/register', body: {
+      'token': token,
+      'device_type': deviceType,
+    });
+  }
+
+  /// Hapus FCM Token
+  Future<ApiResponse> unregisterFcmToken(String token) async {
+    return _api.delete('/fcm/unregister?token=$token'); // Backend expect request body or query string, we can pass via body or query. Since it's DELETE, query is safer unless API handles DELETE body. But in API we used $request->token. We should use query param if using our ApiService delete method which doesn't take body.
+  }
 }
