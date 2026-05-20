@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../global_layout.dart';
@@ -26,6 +29,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final TextEditingController _chatController = TextEditingController();
   bool _isSendingNote = false;
   bool _isPopping = false; // Guard: prevent rebuild during pop
+  final ImagePicker _picker = ImagePicker();
+  File? _gambarPilihan; // Untuk menyimpan gambar yang dipilih (Android/iOS)
+  XFile? _gambarWeb; // Untuk menangani gambar khusus di Web (Chrome)
 
   @override
   void initState() {
@@ -89,14 +95,83 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
+  Future<void> _ambilGambar(ImageSource sumber) async {
+  try {
+    final XFile? gambar = await _picker.pickImage(source: sumber);
+    
+    if (gambar != null && mounted && !_isPopping) {
+      _safeSetState(() {
+        if (kIsWeb) {
+          _gambarWeb = gambar;
+        } else {
+          _gambarPilihan = File(gambar.path);
+        }
+      });
+      // TODO: Disini tempat fungsi memanggil API untuk upload gambar ke server
+      print("Berhasil memilih gambar: ${gambar.name}");
+      
+      // Opsional: Tampilkan feedback ke pengguna
+      ScaffoldMessenger.of(context).showSnackBar(
+         SnackBar(content: Text('Gambar ${gambar.name} dipilih. (Fitur upload belum disambung)')),
+      );
+    }
+  } catch (e) {
+    print("Error mengambil gambar: $e");
+  }
+}
+
+void _tampilkanPilihanMedia(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (BuildContext context) {
+      return SafeArea(
+        child: Wrap(
+          children: <Widget>[
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: AppColors.primary),
+              title: const Text('Pilih dari Galeri'),
+              onTap: () {
+                Navigator.of(context).pop(); 
+                _ambilGambar(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt, color: AppColors.primary),
+              title: const Text('Ambil Foto (Kamera)'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _ambilGambar(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
   Future<void> _sendNote() async {
-    if (_chatController.text.trim().isEmpty) return;
+    // Cegah pengiriman jika teks kosong DAN tidak ada gambar
+    if (_chatController.text.trim().isEmpty && _gambarPilihan == null && _gambarWeb == null) return;
+    
     _safeSetState(() => _isSendingNote = true);
 
-    final resp = await _taskService.addNote(widget.taskId, _chatController.text.trim());
+    // TODO: Pastikan _taskService.addNote milikmu sudah diperbarui untuk menerima parameter file gambar
+    final resp = await _taskService.addNote(
+      widget.taskId, 
+      _chatController.text.trim(),
+    );
+
     if (mounted && !_isPopping) {
       if (resp.success) {
         _chatController.clear();
+        _safeSetState(() {
+          _gambarPilihan = null;
+          _gambarWeb = null;
+        });
         await _loadTask();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -439,35 +514,84 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
             child: SafeArea(
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _chatController,
-                      decoration: InputDecoration(
-                        hintText: 'Ketikan pesan...',
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.border),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                          borderSide: const BorderSide(color: AppColors.border),
+                  // --- PREVIEW GAMBAR JIKA ADA ---
+                  if (_gambarPilihan != null || _gambarWeb != null)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      alignment: Alignment.centerLeft,
+                      child: Stack(
+                        children: [
+                          Container(
+                            height: 80,
+                            width: 80,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.border),
+                              image: DecorationImage(
+                                fit: BoxFit.cover,
+                                image: kIsWeb && _gambarWeb != null
+                                    ? NetworkImage(_gambarWeb!.path) as ImageProvider
+                                    : FileImage(_gambarPilihan!),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            right: -10,
+                            top: -10,
+                            child: IconButton(
+                              icon: const Icon(Icons.cancel, color: Colors.red),
+                              onPressed: () {
+                                _safeSetState(() {
+                                  _gambarPilihan = null;
+                                  _gambarWeb = null;
+                                });
+                              },
+                            ),
+                          )
+                        ],
+                      ),
+                    ),
+                  // -------------------------------
+
+                  Row(
+                    children: [
+                      // TOMBOL KAMERA
+                      IconButton(
+                        icon: const Icon(LucideIcons.camera, color: AppColors.primary),
+                        onPressed: () => _tampilkanPilihanMedia(context),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _chatController,
+                          decoration: InputDecoration(
+                            hintText: 'Ketikan pesan...',
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: const BorderSide(color: AppColors.border),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(24),
+                              borderSide: const BorderSide(color: AppColors.border),
+                            ),
+                          ),
+                          onSubmitted: (_) => _sendNote(),
                         ),
                       ),
-                      onSubmitted: (_) => _sendNote(),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  CircleAvatar(
-                    backgroundColor: AppColors.primary,
-                    child: _isSendingNote
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : IconButton(
-                            icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
-                            onPressed: _sendNote,
-                          ),
+                      const SizedBox(width: 12),
+                      CircleAvatar(
+                        backgroundColor: AppColors.primary,
+                        child: _isSendingNote
+                            ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : IconButton(
+                                icon: const Icon(LucideIcons.send, color: Colors.white, size: 18),
+                                onPressed: _sendNote,
+                              ),
+                      ),
+                    ],
                   ),
                 ],
               ),
