@@ -33,10 +33,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs INI
+    signingConfigs {
+        create("debug") {
+            storeFile = file("debug.keystore") // Mengarah ke file keystore yang baru kita copy
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+        
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
     }
