@@ -73,6 +73,85 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     );
   }
 
+  // --- FUNGSI BARU: POP-UP GABUNG PROYEK ---
+  void _showJoinProjectDialog(BuildContext context) {
+    final TextEditingController codeController = TextEditingController();
+    bool isJoining = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Gabung Proyek', style: TextStyle(fontWeight: FontWeight.bold)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Masukkan kode referral proyek yang ingin kamu ikuti:', style: TextStyle(fontSize: 14)),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: codeController,
+                  decoration: InputDecoration(
+                    hintText: 'Contoh: PRJ-12345',
+                    prefixIcon: const Icon(LucideIcons.key),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isJoining ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                onPressed: isJoining ? null : () async {
+                  if (codeController.text.trim().isEmpty) {
+                     ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Kode tidak boleh kosong!'), backgroundColor: Colors.red),
+                     );
+                     return;
+                  }
+
+                  setStateDialog(() => isJoining = true);
+
+                  final resp = await _projectService.joinProject(codeController.text.trim());
+                  bool isSuccess = resp.success;
+                  String message = resp.message.isNotEmpty ? resp.message : (isSuccess ? "Berhasil gabung ke proyek!" : "Gagal bergabung ke proyek");
+                  setStateDialog(() => isJoining = false);
+
+                  if (mounted) {
+                    Navigator.pop(ctx); 
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(message),
+                        backgroundColor: isSuccess ? Colors.green : Colors.red,
+                      ),
+                    );
+
+                    if (isSuccess) {
+                      _loadProjects(); 
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: isJoining
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Gabung', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        }
+      ),
+    );
+  }
+
   Future<void> _toggleProjectStatus(Project project) async {
     final resp = await _projectService.toggleStatus(project.id);
     if (resp.success) {
@@ -123,13 +202,28 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
             ),
             const SizedBox(height: 16),
             // Create Project Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _showProjectForm(),
-                icon: const Icon(LucideIcons.plus),
-                label: const Text('BUAT PROYEK'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showProjectForm(),
+                    icon: const Icon(LucideIcons.plus, size: 18),
+                    label: const Text('BUAT'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _showJoinProjectDialog(context),
+                    icon: const Icon(LucideIcons.logIn, size: 18, color: AppColors.primary),
+                    label: const Text('GABUNG', style: TextStyle(color: AppColors.primary)),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: AppColors.primary),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             // Project List

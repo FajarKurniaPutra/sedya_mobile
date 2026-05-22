@@ -46,6 +46,15 @@ class ProjectService {
     });
   }
 
+  /// Bergabung ke proyek menggunakan kode referral
+  Future<ApiResponse> joinProject(String referralCode) async {
+    // Sesuaikan endpoint '/projects/join' dan nama body 'kode_proyek' 
+    // dengan yang dibuat oleh teman backend-mu ya!
+    return _api.post('/projects/join', body: {
+      'kode_proyek': referralCode, 
+    });
+  }
+
   /// Update project
   Future<ApiResponse> updateProject(int projectId, {
     required String name,
