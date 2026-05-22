@@ -119,16 +119,18 @@ class ApiService {
     }
   }
 
-  /// POST multipart (untuk upload file/gambar)
+  /// POST multipart (Ini KODE ASLIMU yang sangat sempurna untuk upload file/gambar)
   Future<ApiResponse> postMultipart(String endpoint, {Map<String, String>? fields, List<http.MultipartFile>? files}) async {
     try {
       final uri = Uri.parse('${ApiConfig.apiUrl}$endpoint');
       final request = http.MultipartRequest('POST', uri);
+      
       final token = await _getToken();
       if (token != null) {
         request.headers['Authorization'] = 'Bearer $token';
       }
       request.headers['Accept'] = 'application/json';
+      
       if (fields != null) request.fields.addAll(fields);
       if (files != null) request.files.addAll(files);
 

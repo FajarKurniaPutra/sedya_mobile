@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../models/models.dart';
 import 'api_service.dart';
 
@@ -83,11 +87,41 @@ class TaskService {
     return _api.delete('/tasks/$taskId');
   }
 
-  /// Tambah catatan/note ke task
-  Future<ApiResponse> addNote(int taskId, String message) async {
-    return _api.post('/tasks/$taskId/notes', body: {
+  /// Tambah catatan/note ke task (Mendukung pengiriman gambar)
+  Future<ApiResponse> addNote(
+    int taskId, 
+    String message, {
+    File? imageFile, 
+    XFile? imageWeb,
+  }) async {
+    // Siapkan teks catatannya
+    final Map<String, String> fields = {
       'isi_catatan': message,
-    });
+    };
+
+    List<http.MultipartFile> files = [];
+
+    // Proses file gambar (Web vs Android/iOS)
+    if (kIsWeb && imageWeb != null) {
+      final bytes = await imageWeb.readAsBytes();
+      files.add(http.MultipartFile.fromBytes(
+        'gambar', // INFO: Pastikan ke teman backend-mu, nama parameter API-nya 'gambar', 'image', atau 'foto'?
+        bytes,
+        filename: imageWeb.name,
+      ));
+    } else if (!kIsWeb && imageFile != null) {
+      files.add(await http.MultipartFile.fromPath(
+        'gambar', // Samakan nama parameter ini dengan yang di atas
+        imageFile.path,
+      ));
+    }
+
+    // Gunakan postMultipart bawaan ApiService-mu yang sudah bersih
+    return _api.postMultipart(
+      '/tasks/$taskId/notes',
+      fields: fields,
+      files: files.isNotEmpty ? files : null,
+    );
   }
 
   /// Ambil log history task
