@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/project_service.dart';
 
-class MemberListView extends StatelessWidget {
+class MemberListView extends StatefulWidget {
   final int projectId;
   final List<ProjectMember> members;
   final String userRole;
@@ -18,20 +18,121 @@ class MemberListView extends StatelessWidget {
     required this.userRole,
   });
 
+  @override
+  State<MemberListView> createState() => _MemberListViewState();
+}
+
+class _MemberListViewState extends State<MemberListView> {
+  final ProjectService _projectService = ProjectService();
+
   void _showInviteModal(BuildContext context) {
-    // Cari kode referral dari project (tersedia via members dari parent)
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => _InviteModal(projectId: projectId),
+      builder: (ctx) => _InviteModal(projectId: widget.projectId),
+    );
+  }
+
+  // --- FUNGSI BARU: POP-UP MANIPULASI MEMBER ---
+  void _showEditMemberDialog(BuildContext context, int projectId, ProjectMember member) {
+    String selectedRole = member.roleName; 
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text('Edit Anggota:\n${member.user?.name ?? "Unknown"}', textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Ubah Jabatan/Role:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: ['Pemimpin Proyek', 'Pemimpin Projek', 'Asisten', 'Anggota'].contains(selectedRole) ? selectedRole : 'Anggota',
+                  items: ['Asisten', 'Anggota'] 
+                      .map((role) => DropdownMenuItem(value: role, child: Text(role)))
+                      .toList(),
+                  onChanged: (val) {
+                    if (val != null) setStateDialog(() => selectedRole = val);
+                  },
+                ),
+                const SizedBox(height: 20),
+                const Text('Tindakan Status:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: member.statusMember ? Colors.red : Colors.green,
+                      side: BorderSide(color: member.statusMember ? Colors.red : Colors.green),
+                    ),
+                    icon: Icon(member.statusMember ? LucideIcons.userX : LucideIcons.userCheck, size: 16),
+                    label: Text(member.statusMember ? 'Nonaktifkan Anggota' : 'Aktifkan Anggota'),
+                    onPressed: isSaving ? null : () async {
+                      setStateDialog(() => isSaving = true);
+                      
+                      final resp = await _projectService.toggleMemberStatus(projectId, member.userId);
+                      
+                      setStateDialog(() => isSaving = false);
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(resp.message.isNotEmpty ? resp.message : 'Status anggota berhasil diperbarui'),
+                            backgroundColor: resp.success ? Colors.green : Colors.red,
+                          ),
+                        );
+                        // CATATAN: Untuk update layar otomatis setelah berhasil, kamu harus merefresh ulang datanya
+                        // Karena file ini dipisah, kamu bisa panggil reload dari parent screen-nya nanti
+                      }
+                    },
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+                onPressed: isSaving ? null : () async {
+                  setStateDialog(() => isSaving = true);
+                  
+                  final resp = await _projectService.updateMemberRole(projectId, member.userId, selectedRole);
+                  
+                  setStateDialog(() => isSaving = false);
+                  if (mounted) {
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(resp.message.isNotEmpty ? resp.message : 'Role berhasil diperbarui'),
+                        backgroundColor: resp.success ? Colors.green : Colors.red,
+                      ),
+                    );
+                  }
+                },
+                child: isSaving
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Simpan', style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        }
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final activeMembers = members.where((m) => m.user != null).toList();
-    final isLeader = userRole == 'Pemimpin Proyek' || userRole == 'Pemimpin Projek';
-    final canInvite = isLeader || userRole == 'Asisten';
+    final activeMembers = widget.members.where((m) => m.user != null).toList();
+    final isLeader = widget.userRole == 'Pemimpin Proyek' || widget.userRole == 'Pemimpin Projek';
+    final canInvite = isLeader || widget.userRole == 'Asisten';
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -57,6 +158,9 @@ class MemberListView extends StatelessWidget {
                     itemBuilder: (ctx, i) {
                       final member = activeMembers[i];
                       final user = member.user!;
+                      // Mencegah leader mengubah status dirinya sendiri
+                      final isSelf = user.name == 'Dina cantik' || user.name == 'Dina'; // Sesuaikan logika login nanti
+                      
                       return Card(
                         elevation: 0,
                         shape: RoundedRectangleBorder(
@@ -69,8 +173,8 @@ class MemberListView extends StatelessWidget {
                           child: Row(
                             children: [
                               CircleAvatar(
-                                backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                foregroundColor: AppColors.primary,
+                                backgroundColor: member.statusMember ? AppColors.primary.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.2),
+                                foregroundColor: member.statusMember ? AppColors.primary : Colors.grey,
                                 child: Text(user.name.isNotEmpty ? user.name[0] : '?'),
                               ),
                               const SizedBox(width: 16),
@@ -80,7 +184,12 @@ class MemberListView extends StatelessWidget {
                                   children: [
                                     Text(
                                       user.name,
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold, 
+                                        fontSize: 16,
+                                        decoration: member.statusMember ? TextDecoration.none : TextDecoration.lineThrough,
+                                        color: member.statusMember ? AppColors.textPrimary : Colors.grey,
+                                      ),
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
@@ -125,6 +234,17 @@ class MemberListView extends StatelessWidget {
                                   ),
                                 ],
                               ),
+                              
+                              // --- TAMBAHAN TOMBOL EDIT UNTUK LEADER ---
+                              if (isLeader && !isSelf && (member.roleName != 'Pemimpin Proyek' && member.roleName != 'Pemimpin Projek')) ...[
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(LucideIcons.edit2, size: 20, color: AppColors.primary),
+                                  onPressed: () => _showEditMemberDialog(context, widget.projectId, member),
+                                )
+                              ]
                             ],
                           ),
                         ),

@@ -12,7 +12,9 @@ class ProjectService {
       if (resp.data is List) {
         return (resp.data as List).map((j) => Project.fromJson(j)).toList();
       } else if (resp.data is Map && resp.data['data'] is List) {
-        return (resp.data['data'] as List).map((j) => Project.fromJson(j)).toList();
+        return (resp.data['data'] as List)
+            .map((j) => Project.fromJson(j))
+            .toList();
       }
     }
     return [];
@@ -36,27 +38,29 @@ class ProjectService {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    return _api.post('/projects', body: {
-      'nama_projek': name,
-      'kode_projek': code,
-      'deskripsi': description,
-      'tahapan_projek': phase ?? 'Perencanaan',
-      'tgl_mulai': startDate?.toIso8601String().split('T')[0],
-      'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
-    });
+    return _api.post(
+      '/projects',
+      body: {
+        'nama_projek': name,
+        'kode_projek': code,
+        'deskripsi': description,
+        'tahapan_projek': phase ?? 'Perencanaan',
+        'tgl_mulai': startDate?.toIso8601String().split('T')[0],
+        'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
+      },
+    );
   }
 
   /// Bergabung ke proyek menggunakan kode referral
   Future<ApiResponse> joinProject(String referralCode) async {
-    // Sesuaikan endpoint '/projects/join' dan nama body 'kode_proyek' 
+    // Sesuaikan endpoint '/projects/join' dan nama body 'kode_proyek'
     // dengan yang dibuat oleh teman backend-mu ya!
-    return _api.post('/projects/join', body: {
-      'kode_proyek': referralCode, 
-    });
+    return _api.post('/projects/join', body: {'kode_proyek': referralCode});
   }
 
   /// Update project
-  Future<ApiResponse> updateProject(int projectId, {
+  Future<ApiResponse> updateProject(
+    int projectId, {
     required String name,
     String? code,
     String? description,
@@ -64,14 +68,17 @@ class ProjectService {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    return _api.put('/projects/$projectId', body: {
-      'nama_projek': name,
-      'kode_projek': code,
-      'deskripsi': description,
-      'tahapan_projek': phase,
-      'tgl_mulai': startDate?.toIso8601String().split('T')[0],
-      'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
-    });
+    return _api.put(
+      '/projects/$projectId',
+      body: {
+        'nama_projek': name,
+        'kode_projek': code,
+        'deskripsi': description,
+        'tahapan_projek': phase,
+        'tgl_mulai': startDate?.toIso8601String().split('T')[0],
+        'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
+      },
+    );
   }
 
   /// Toggle status aktif/nonaktif project
@@ -81,16 +88,19 @@ class ProjectService {
 
   /// Invite member ke project
   Future<ApiResponse> inviteMember(int projectId, int userId) async {
-    return _api.post('/projects/$projectId/invite', body: {
-      'user_id': userId,
-    });
+    return _api.post('/projects/$projectId/invite', body: {'user_id': userId});
   }
 
   /// Set role member
-  Future<ApiResponse> setMemberRole(int projectId, int memberId, int roleId) async {
-    return _api.put('/projects/$projectId/members/$memberId/role', body: {
-      'role_id': roleId,
-    });
+  Future<ApiResponse> setMemberRole(
+    int projectId,
+    int memberId,
+    int roleId,
+  ) async {
+    return _api.put(
+      '/projects/$projectId/members/$memberId/role',
+      body: {'role_id': roleId},
+    );
   }
 
   /// Hapus project
@@ -101,5 +111,27 @@ class ProjectService {
   /// Toggle status member (aktif/nonaktif)
   Future<ApiResponse> toggleMemberStatus(int projectId, int memberId) async {
     return _api.put('/projects/$projectId/members/$memberId/toggle-status');
+  }
+
+  /// Mengubah role anggota proyek (khusus Pemimpin Proyek)
+  Future<ApiResponse> updateMemberRole(
+    int projectId,
+    int memberUserId,
+    String newRole,
+  ) async {
+    return _api.put(
+      '/projects/$projectId/members/$memberUserId/role',
+      body: {
+        'role': newRole, // Misal: 'Asisten' atau 'Anggota'
+      },
+    );
+  }
+
+  /// Mengubah status aktif/nonaktif anggota proyek (alias)
+  Future<ApiResponse> toggleMemberStatusByUser(
+    int projectId,
+    int memberUserId,
+  ) async {
+    return _api.put('/projects/$projectId/members/$memberUserId/toggle-status');
   }
 }
