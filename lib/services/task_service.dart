@@ -125,10 +125,10 @@ class TaskService {
   }
 
   /// Ambil log history task
-  Future<List<Map<String, dynamic>>> getTaskLogs(int taskId) async {
+  Future<List<ActivityLog>> getTaskLogs(int taskId) async {
     final resp = await _api.get('/tasks/$taskId/logs');
     if (resp.success && resp.data is List) {
-      return (resp.data as List).cast<Map<String, dynamic>>();
+      return (resp.data as List).map((j) => ActivityLog.fromJson(j)).toList();
     }
     return [];
   }

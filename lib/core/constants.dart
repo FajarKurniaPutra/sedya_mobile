@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'theme_notifier.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF4F46E5); // Deep Indigo/Primary Blue
-  static const Color background = Color(0xFFF8FAFC); // Clean off-white
-  static const Color surface = Colors.white;
+  static Color get primary => const Color(0xFF4F46E5);
+  static Color get background => themeNotifier.value == ThemeMode.dark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC);
+  static Color get surface => themeNotifier.value == ThemeMode.dark ? const Color(0xFF1E293B) : Colors.white;
   
-  static const Color textPrimary = Color(0xFF1E293B); // Slate-800
-  static const Color textSecondary = Color(0xFF64748B); // Slate-500
-  static const Color border = Color(0xFFE2E8F0); // Slate-200
+  static Color get textPrimary => themeNotifier.value == ThemeMode.dark ? const Color(0xFFF8FAFC) : const Color(0xFF1E293B);
+  static Color get textSecondary => themeNotifier.value == ThemeMode.dark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+  static Color get border => themeNotifier.value == ThemeMode.dark ? const Color(0xFF334155) : const Color(0xFFE2E8F0);
 
   // Semantic Colors
   static const Color statusDone = Color(0xFF10B981); // Emerald Green

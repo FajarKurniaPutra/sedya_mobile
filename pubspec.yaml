@@ -45,6 +45,7 @@ dependencies:
   share_plus: ^13.1.0
   image_picker: ^1.2.2
 
+  firebase_core: any
 dev_dependencies:
   flutter_test:
     sdk: flutter

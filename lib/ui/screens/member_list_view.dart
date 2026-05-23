@@ -52,7 +52,7 @@ class _MemberListViewState extends State<MemberListView> {
                 const Text('Ubah Jabatan/Role:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: ['Pemimpin Proyek', 'Pemimpin Projek', 'Asisten', 'Anggota'].contains(selectedRole) ? selectedRole : 'Anggota',
+                  initialValue: ['Pemimpin Proyek', 'Pemimpin Projek', 'Asisten', 'Anggota'].contains(selectedRole) ? selectedRole : 'Anggota',
                   items: ['Asisten', 'Anggota'] 
                       .map((role) => DropdownMenuItem(value: role, child: Text(role)))
                       .toList(),

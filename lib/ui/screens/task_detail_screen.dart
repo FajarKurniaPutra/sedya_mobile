@@ -10,6 +10,7 @@ import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/task_service.dart';
 import 'package:intl/intl.dart';
+import '../widgets/skeleton.dart';
 
 class TaskDetailScreen extends StatefulWidget {
   final int taskId;
@@ -28,6 +29,7 @@ class TaskDetailScreen extends StatefulWidget {
 class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final TaskService _taskService = TaskService();
   TaskItem? _task;
+  List<ActivityLog> _logs = [];
   bool _isLoading = true;
   String _currentStatus = 'TODO';
   final TextEditingController _chatController = TextEditingController();
@@ -58,9 +60,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (!mounted || _isPopping) return;
     _safeSetState(() => _isLoading = true);
     final task = await _taskService.getTaskDetail(widget.taskId);
+    final logs = await _taskService.getTaskLogs(widget.taskId);
     if (mounted && !_isPopping) {
       _safeSetState(() {
         _task = task;
+        _logs = logs;
         _currentStatus = task?.status ?? 'TODO';
         _isLoading = false;
       });
@@ -180,8 +184,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     // Cegah pengiriman jika teks kosong DAN tidak ada gambar
     if (_chatController.text.trim().isEmpty &&
         _gambarPilihan == null &&
-        _gambarWeb == null)
+        _gambarWeb == null) {
       return;
+    }
 
     _safeSetState(() => _isSendingNote = true);
 
@@ -251,7 +256,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (_isLoading) {
       return GlobalLayout(
         title: 'Detail Tugas',
-        child: const Center(child: CircularProgressIndicator()),
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: 5,
+          separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+          itemBuilder: (ctx, i) => const Skeleton(height: 60),
+        ),
       );
     }
 
@@ -277,12 +287,29 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final DateFormat formatter = DateFormat('dd MMM yyyy');
     final displayStatus = _getDisplayStatus(_currentStatus);
 
-    return GlobalLayout(
-      title: 'Detail Tugas',
-      child: Column(
-        children: [
-          Expanded(
-            child: RefreshIndicator(
+    return DefaultTabController(
+      length: 2,
+      child: GlobalLayout(
+        title: 'Detail Tugas',
+        child: Column(
+          children: [
+            TabBar(
+              labelColor: AppColors.primary,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primary,
+              tabs: const [
+                Tab(text: 'Detail'),
+                Tab(text: 'Riwayat'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  // --- TAB 1: Detail Tugas & Chat ---
+                  Column(
+                    children: [
+                      Expanded(
+                        child: RefreshIndicator(
               onRefresh: _loadTask,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -806,7 +833,69 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               ),
             ),
           ),
-        ],
+                  ), // End of Tab 1 Column
+                  // --- TAB 2: Riwayat Aktivitas ---
+                  RefreshIndicator(
+                    onRefresh: _loadTask,
+                    child: _logs.isEmpty
+                        ? SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: SizedBox(
+                              height: MediaQuery.of(context).size.height * 0.6,
+                              child: const Center(
+                                child: Text('Belum ada riwayat aktivitas', style: TextStyle(color: AppColors.textSecondary)),
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.all(16),
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            itemCount: _logs.length,
+                            separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+                            itemBuilder: (ctx, i) {
+                              final log = _logs[i];
+                              final time = log.createdAt != null
+                                  ? DateFormat('dd MMM yyyy, HH:mm').format(log.createdAt!)
+                                  : '';
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 16,
+                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                                    foregroundColor: AppColors.primary,
+                                    child: Text(
+                                      log.user?.name.isNotEmpty == true ? log.user!.name[0] : '?',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          log.action,
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          time,
+                                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

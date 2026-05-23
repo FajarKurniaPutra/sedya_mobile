@@ -8,6 +8,8 @@ import '../../providers/auth_provider.dart';
 import '../../services/project_service.dart';
 import 'project_detail_screen.dart';
 
+import '../widgets/skeleton.dart';
+
 class ProjectListScreen extends StatefulWidget {
   const ProjectListScreen({super.key});
 
@@ -229,18 +231,28 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
             // Project List
             Expanded(
               child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? ListView.separated(
+                      itemCount: 5,
+                      separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+                      itemBuilder: (ctx, i) => const Skeleton(height: 100),
+                    )
                   : _filteredProjects.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              // TODO: [TUGAS REKAN] Task 5 - Tambahkan sebuah gambar ilustrasi (menggunakan Image.asset) ketika daftar proyek kosong, bukan sekadar Icon.
-                              Icon(LucideIcons.folderOpen, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                              const SizedBox(height: 16),
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(LucideIcons.rocket, size: 64, color: AppColors.primary),
+                              ),
+                              const SizedBox(height: 24),
                               Text(
-                                _searchQuery.isNotEmpty ? 'Proyek tidak ditemukan' : 'Belum ada proyek',
-                                style: const TextStyle(color: AppColors.textSecondary),
+                                _searchQuery.isNotEmpty ? 'Proyek tidak ditemukan' : 'Belum ada proyek, yuk buat baru! 🚀',
+                                style: const TextStyle(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),

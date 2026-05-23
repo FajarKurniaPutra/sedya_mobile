@@ -5,6 +5,7 @@ import '../global_layout.dart';
 import '../../core/constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
+import '../../models/models.dart';
 import '../../services/project_service.dart';
 import '../../services/task_service.dart';
 import '../../services/sprint_service.dart';
@@ -12,6 +13,7 @@ import 'task_detail_screen.dart';
 import 'member_list_view.dart';
 import 'hr_dashboard_view.dart';
 import 'package:intl/intl.dart';
+import '../widgets/skeleton.dart';
 
 class ProjectDetailScreen extends StatefulWidget {
   final int projectId;
@@ -237,7 +239,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
     if (_isLoading || _tabController == null) {
       return GlobalLayout(
         title: 'Detail Proyek',
-        child: const Center(child: CircularProgressIndicator()),
+        child: ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: 5,
+          separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+          itemBuilder: (ctx, i) => const Skeleton(height: 120),
+        ),
       );
     }
 
@@ -414,9 +421,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(LucideIcons.clipboardList, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                            const SizedBox(height: 16),
-                            const Text('Belum ada tugas', style: TextStyle(color: AppColors.textSecondary)),
+                            Container(
+                              padding: const EdgeInsets.all(24),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(LucideIcons.coffee, size: 64, color: AppColors.primary),
+                            ),
+                            const SizedBox(height: 24),
+                            Text(
+                              searchController.text.isNotEmpty ? 'Tugas tidak ditemukan' : 'Hooray! Semua tugas selesai, waktunya ngopi ☕',
+                              style: const TextStyle(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                              textAlign: TextAlign.center,
+                            ),
                           ],
                         ),
                       )

@@ -64,7 +64,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '446018190878',
     projectId: 'sedya-c27aa',
     storageBucket: 'sedya-c27aa.firebasestorage.app',
-    iosClientId: '446018190878-nhq0rjsifl11t44p8ma0t9g04jgtuhq0.apps.googleusercontent.com',
+    iosClientId:
+        '446018190878-nhq0rjsifl11t44p8ma0t9g04jgtuhq0.apps.googleusercontent.com',
     iosBundleId: 'com.example.sedyaMobile',
   );
 
@@ -74,7 +75,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '446018190878',
     projectId: 'sedya-c27aa',
     storageBucket: 'sedya-c27aa.firebasestorage.app',
-    iosClientId: '446018190878-nhq0rjsifl11t44p8ma0t9g04jgtuhq0.apps.googleusercontent.com',
+    iosClientId:
+        '446018190878-nhq0rjsifl11t44p8ma0t9g04jgtuhq0.apps.googleusercontent.com',
     iosBundleId: 'com.example.sedyaMobile',
   );
 

@@ -5,6 +5,7 @@ import '../../core/constants.dart';
 import '../../models/models.dart';
 import '../../services/notification_service.dart';
 import 'package:intl/intl.dart';
+import '../widgets/skeleton.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -70,7 +71,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
             ),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: 5,
+                    separatorBuilder: (ctx, i) => const SizedBox(height: 12),
+                    itemBuilder: (ctx, i) => const Skeleton(height: 80),
+                  )
                 : _notifications.isEmpty
                     ? Center(
                         child: Column(
