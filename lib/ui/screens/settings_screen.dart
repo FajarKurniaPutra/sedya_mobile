@@ -46,23 +46,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? ClipOval(
                             child: Image.network(
                               user!.photoUrl!,
-                              width: 96, height: 96,
+                              width: 96,
+                              height: 96,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => Text(
-                                user.name.isNotEmpty ? user.name[0] : '?',
-                                style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                              ),
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Text(
+                                    user.name.isNotEmpty ? user.name[0] : '?',
+                                    style: const TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                             ),
                           )
                         : Text(
                             user?.name.isNotEmpty == true ? user!.name[0] : '?',
-                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                   ),
                   const SizedBox(height: 16),
                   Text(
                     user?.name ?? 'User',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -73,7 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 48),
-            
+
             // Application Settings
             const Text(
               'Pengaturan Aplikasi',
@@ -93,7 +104,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 activeThumbColor: AppColors.primary,
                 onChanged: (val) {
                   setState(() {
-                    themeNotifier.value = val ? ThemeMode.dark : ThemeMode.light;
+                    themeNotifier.value = val
+                        ? ThemeMode.dark
+                        : ThemeMode.light;
                   });
                 },
               ),
@@ -111,7 +124,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('Tentang Aplikasi'),
                     leading: const Icon(LucideIcons.info),
                     trailing: const Icon(LucideIcons.chevronRight, size: 16),
-                    onTap: () {},
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Tentang Aplikasi'),
+                          content: const Text(
+                            'Sedya Corp adalah platform manajemen proyek modern yang membantu tim merencanakan, berkolaborasi, dan menyelesaikan proyek secara efisien.\n\nVersi 1.0.0',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Tutup'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const Divider(height: 1, indent: 16, endIndent: 16),
                   ListTile(
@@ -119,7 +148,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(LucideIcons.headphones),
                     trailing: const Icon(LucideIcons.chevronRight, size: 16),
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Menghubungkan ke Customer Service...')));
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Pusat Bantuan (CS)'),
+                          content: const Text(
+                            'Butuh bantuan? Tim kami siap membantu Anda.\n\nEmail: support@sedyacorp.com\nTelepon: +62 800 1234 5678\nJam Kerja: Senin - Jumat (09:00 - 17:00)',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Tutup'),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                   const Divider(height: 1, indent: 16, endIndent: 16),
@@ -128,7 +171,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: const Icon(LucideIcons.fileText),
                     trailing: const Icon(LucideIcons.chevronRight, size: 16),
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Halaman Syarat & Ketentuan akan segera hadir.')));
+                      showDialog(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Syarat & Ketentuan'),
+                          content: const SingleChildScrollView(
+                            child: Text(
+                              '1. Penerimaan Syarat\nDengan mengakses atau menggunakan layanan Sedya Corp, Anda setuju untuk terikat oleh Syarat dan Ketentuan ini. Jika Anda tidak setuju dengan bagian mana pun dari ketentuan ini, Anda tidak diperkenankan untuk menggunakan layanan kami.\n\n'
+                              '2. Privasi Data\nKami sangat menjaga kerahasiaan data pengguna dan proyek. Data yang dikumpulkan (termasuk tugas, profil, dan berkas lampiran) semata-mata digunakan untuk kepentingan operasional platform dan tidak akan disebarkan ke pihak ketiga tanpa izin eksplisit.\n\n'
+                              '3. Tanggung Jawab Pengguna\nAnda bertanggung jawab untuk menjaga kerahasiaan kata sandi Anda dan akun, serta bertanggung jawab penuh atas semua aktivitas yang terjadi di bawah sandi atau akun Anda.\n\n'
+                              '4. Perubahan Layanan\nSedya Corp berhak untuk mengubah atau menghentikan, sementara atau secara permanen, layanan (atau bagiannya) dengan atau tanpa pemberitahuan kapan saja. Kami tidak bertanggung jawab kepada Anda atau kepada pihak ketiga atas modifikasi, penangguhan, atau penghentian layanan.',
+                              style: TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx),
+                              child: const Text('Tutup'),
+                            ),
+                          ],
+                        ),
+                      );
                     },
                   ),
                 ],
@@ -137,26 +200,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
-                gradient: const LinearGradient(colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)]),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFDE68A), Color(0xFFF59E0B)],
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: ListTile(
-                title: const Text('Upgrade ke Fitur Pro', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                subtitle: const Text('Dapatkan fitur eksklusif', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                title: const Text(
+                  'Upgrade ke Fitur Pro',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                subtitle: const Text(
+                  'Dapatkan fitur eksklusif',
+                  style: TextStyle(color: Colors.black54, fontSize: 12),
+                ),
                 leading: const Icon(LucideIcons.crown, color: Colors.black87),
-                trailing: const Icon(LucideIcons.chevronRight, color: Colors.black87, size: 16),
+                trailing: const Icon(
+                  LucideIcons.chevronRight,
+                  color: Colors.black87,
+                  size: 16,
+                ),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Halaman berlangganan Sedya Pro sedang dalam pengembangan.')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Halaman berlangganan Sedya Pro sedang dalam pengembangan.',
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Logout Action
             OutlinedButton.icon(
               onPressed: _handleLogout,
-              icon: const Icon(LucideIcons.logOut, color: AppColors.statusOverdue),
+              icon: const Icon(
+                LucideIcons.logOut,
+                color: AppColors.statusOverdue,
+              ),
               label: const Text(
                 'Keluar',
                 style: TextStyle(color: AppColors.statusOverdue),

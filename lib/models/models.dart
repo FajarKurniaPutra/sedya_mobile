@@ -46,14 +46,14 @@ class AppUser {
 /// Model Project — mapping ke tabel `projects` di backend
 class Project {
   final int id;
-  final String name;       // nama_projek
-  final String code;       // kode_projek
+  final String name; // nama_projek
+  final String code; // kode_projek
   final String description; // deskripsi
   final bool statusActive; // status_projek (boolean)
-  final String phase;      // tahapan_projek
+  final String phase; // tahapan_projek
   final String? referralCode; // kode_referral
-  final DateTime? startDate;  // tgl_mulai
-  final DateTime? endDate;    // estimasi_selesai
+  final DateTime? startDate; // tgl_mulai
+  final DateTime? endDate; // estimasi_selesai
   AppUser? creator;
   List<ProjectMember> members;
 
@@ -76,7 +76,9 @@ class Project {
   factory Project.fromJson(Map<String, dynamic> json) {
     List<ProjectMember> members = [];
     if (json['members'] != null) {
-      members = (json['members'] as List).map((m) => ProjectMember.fromJson(m)).toList();
+      members = (json['members'] as List)
+          .map((m) => ProjectMember.fromJson(m))
+          .toList();
     }
 
     // Cari creator (Pemimpin Projek) dari members
@@ -165,15 +167,15 @@ class ProjectMember {
 class TaskItem {
   final int id;
   final int projectId;
-  final String name;       // nama_task
+  final String name; // nama_task
   final String? description;
-  final DateTime? startDate;  // tgl_mulai
+  final DateTime? startDate; // tgl_mulai
   final DateTime? deadline;
-  final int weight;         // bobot
+  final int weight; // bobot
   final String? label;
-  final String status;      // status_task: TODO, IN_PROGRESS, REVIEW, DONE
-  final String? priority;   // prioritas: Rendah, Sedang, Tinggi
-  final AppUser? pic;       // assigned_to (primary PIC)
+  final String status; // status_task: TODO, IN_PROGRESS, REVIEW, DONE
+  final String? priority; // prioritas: Rendah, Sedang, Tinggi
+  final AppUser? pic; // assigned_to (primary PIC)
   final List<AppUser> picUsers; // multi-PIC
   final List<NoteItem> notes;
   final List<TaskImage> images;
@@ -202,22 +204,32 @@ class TaskItem {
   /// Mapping status backend → FE display
   String get displayStatus {
     switch (status) {
-      case 'TODO': return 'Not Started';
-      case 'IN_PROGRESS': return 'In Progress';
-      case 'REVIEW': return 'Review';
-      case 'DONE': return 'Done';
-      default: return status;
+      case 'TODO':
+        return 'Antrean';
+      case 'IN_PROGRESS':
+        return 'Proses';
+      case 'REVIEW':
+        return 'Review';
+      case 'DONE':
+        return 'Selesai';
+      default:
+        return status;
     }
   }
 
   /// Mapping status FE display → backend value
   static String toBackendStatus(String displayStatus) {
     switch (displayStatus) {
-      case 'Not Started': return 'TODO';
-      case 'In Progress': return 'IN_PROGRESS';
-      case 'Review': return 'REVIEW';
-      case 'Done': return 'DONE';
-      default: return displayStatus;
+      case 'Antrean':
+        return 'TODO';
+      case 'Proses':
+        return 'IN_PROGRESS';
+      case 'Review':
+        return 'REVIEW';
+      case 'Selesai':
+        return 'DONE';
+      default:
+        return displayStatus;
     }
   }
 
@@ -225,7 +237,9 @@ class TaskItem {
     // Parse PIC users
     List<AppUser> picUsers = [];
     if (json['pic_users'] != null) {
-      picUsers = (json['pic_users'] as List).map((u) => AppUser.fromJson(u)).toList();
+      picUsers = (json['pic_users'] as List)
+          .map((u) => AppUser.fromJson(u))
+          .toList();
     }
 
     // Parse notes
@@ -237,7 +251,9 @@ class TaskItem {
     // Parse images
     List<TaskImage> images = [];
     if (json['images'] != null) {
-      images = (json['images'] as List).map((i) => TaskImage.fromJson(i)).toList();
+      images = (json['images'] as List)
+          .map((i) => TaskImage.fromJson(i))
+          .toList();
     }
 
     // Parse assignee
@@ -299,7 +315,7 @@ class NoteItem {
   final int id;
   final int taskId;
   final int userId;
-  final String message;       // isi_catatan
+  final String message; // isi_catatan
   final String? attachmentPath;
   final DateTime? createdAt;
   final AppUser? sender;
@@ -355,7 +371,7 @@ class TaskImage {
 class Sprint {
   final int id;
   final int projectId;
-  final String? name;        // nama_sprint
+  final String? name; // nama_sprint
   final DateTime startDate;
   final DateTime endDate;
   final List<SprintGoal> goals;
@@ -374,11 +390,15 @@ class Sprint {
   factory Sprint.fromJson(Map<String, dynamic> json) {
     List<SprintGoal> goals = [];
     if (json['goals'] != null) {
-      goals = (json['goals'] as List).map((g) => SprintGoal.fromJson(g)).toList();
+      goals = (json['goals'] as List)
+          .map((g) => SprintGoal.fromJson(g))
+          .toList();
     }
     List<WeeklyPlan> weeklyPlans = [];
     if (json['weekly_plans'] != null) {
-      weeklyPlans = (json['weekly_plans'] as List).map((wp) => WeeklyPlan.fromJson(wp)).toList();
+      weeklyPlans = (json['weekly_plans'] as List)
+          .map((wp) => WeeklyPlan.fromJson(wp))
+          .toList();
     }
     return Sprint(
       id: _toInt(json['id']),
@@ -398,13 +418,19 @@ class WeeklyPlan {
   final int sprintId;
   final List<String> planningPoin;
 
-  WeeklyPlan({required this.id, required this.sprintId, this.planningPoin = const []});
+  WeeklyPlan({
+    required this.id,
+    required this.sprintId,
+    this.planningPoin = const [],
+  });
 
   factory WeeklyPlan.fromJson(Map<String, dynamic> json) {
     List<String> points = [];
     if (json['planning_poin'] != null) {
       if (json['planning_poin'] is List) {
-        points = (json['planning_poin'] as List).map((e) => e.toString()).toList();
+        points = (json['planning_poin'] as List)
+            .map((e) => e.toString())
+            .toList();
       } else if (json['planning_poin'] is String) {
         // Just in case it's stringified JSON
         // Actually, let's keep it simple
@@ -439,7 +465,7 @@ class SprintGoal {
 class AppNotification {
   final int id;
   final int userId;
-  final String message;  // pesan
+  final String message; // pesan
   final bool isRead;
   final String? referenceType;
   final int? referenceId;
@@ -462,7 +488,9 @@ class AppNotification {
       message: json['pesan'] ?? '',
       isRead: json['is_read'] == true || json['is_read'] == 1,
       referenceType: json['reference_type'],
-      referenceId: json['reference_id'] != null ? _toInt(json['reference_id']) : null,
+      referenceId: json['reference_id'] != null
+          ? _toInt(json['reference_id'])
+          : null,
       createdAt: _parseDateTime(json['created_at']),
     );
   }
