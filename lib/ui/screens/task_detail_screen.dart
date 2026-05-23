@@ -190,10 +190,11 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
     _safeSetState(() => _isSendingNote = true);
 
-    // TODO: Pastikan _taskService.addNote milikmu sudah diperbarui untuk menerima parameter file gambar
     final resp = await _taskService.addNote(
       widget.taskId,
       _chatController.text.trim(),
+      imageFile: _gambarPilihan,
+      imageWeb: _gambarWeb,
     );
 
     if (mounted && !_isPopping) {

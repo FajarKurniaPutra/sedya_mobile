@@ -218,7 +218,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                   child: OutlinedButton.icon(
                     onPressed: () => _showJoinProjectDialog(context),
                     icon: const Icon(LucideIcons.logIn, size: 18, color: AppColors.primary),
-                    label: const Text('GABUNG', style: TextStyle(color: AppColors.primary)),
+                    label: const Text('GABUNG PROYEK', style: TextStyle(color: AppColors.primary)),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       side: const BorderSide(color: AppColors.primary),

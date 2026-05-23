@@ -5,6 +5,10 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../models/models.dart';
 import '../core/api_config.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'dart:io' show Platform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Provider global untuk state autentikasi & user aktif.
 /// Menggantikan pattern `DummyData.currentUser` yang statis.
@@ -82,6 +86,16 @@ class AuthProvider extends ChangeNotifier {
       await _api.saveToken(_token!);
       await _saveUserLocally(_currentUser!);
 
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          final deviceType = kIsWeb ? 'web' : (Platform.isIOS ? 'ios' : 'android');
+          await NotificationService().registerFcmToken(fcmToken, deviceType: deviceType);
+        }
+      } catch (e) {
+        debugPrint('Gagal register FCM Token: $e');
+      }
+
       notifyListeners();
       return null; // success, no error
     }
@@ -95,6 +109,13 @@ class AuthProvider extends ChangeNotifier {
     if (_token != null) {
       await _api.post('/logout'); // Best-effort, ignore error
     }
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null) {
+        await NotificationService().unregisterFcmToken(fcmToken);
+      }
+    } catch (_) {}
+
     await _api.clearToken();
     try {
       await GoogleSignIn().disconnect();

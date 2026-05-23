@@ -361,7 +361,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                   ? [HRDashboardView(projectId: widget.projectId)]
                   : [
                       _buildTaskList(),
-                      MemberListView(projectId: widget.projectId, members: _project!.members, userRole: _userRole),
+                      MemberListView(
+                        projectId: widget.projectId, 
+                        members: _project!.members, 
+                        userRole: _userRole,
+                        onRefresh: _loadData,
+                      ),
                     ],
             ),
           ),

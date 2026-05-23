@@ -3,6 +3,9 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../core/constants.dart';
 import '../../models/models.dart';
 import '../../services/hr_service.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart'; // for kIsWeb
 
 class HRDashboardView extends StatefulWidget {
   final int projectId;
@@ -53,11 +56,7 @@ class _HRDashboardViewState extends State<HRDashboardView> {
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
               OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Fitur unduh laporan akan segera hadir')),
-                  );
-                },
+                onPressed: () => _showDownloadDialog(context),
                 icon: const Icon(LucideIcons.download, size: 16),
                 label: const Text('Unduh Laporan'),
                 style: OutlinedButton.styleFrom(
@@ -177,5 +176,65 @@ class _HRDashboardViewState extends State<HRDashboardView> {
         ],
       ),
     );
+  }
+
+  void _showDownloadDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Pilih Format Laporan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(ctx)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () => _downloadAndShare(ctx, 'pdf', 'application/pdf'),
+              icon: const Icon(LucideIcons.fileText),
+              label: const Text('Unduh sebagai PDF'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () => _downloadAndShare(ctx, 'csv', 'text/csv'),
+              icon: const Icon(LucideIcons.fileSpreadsheet),
+              label: const Text('Unduh sebagai CSV'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _downloadAndShare(BuildContext ctx, String format, String mimeType) async {
+    Navigator.pop(ctx);
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sedang mengunduh laporan $format...')));
+    
+    final bytes = await _hrService.downloadReport(widget.projectId, format);
+    if (bytes != null) {
+      if (!kIsWeb) {
+        final xfile = XFile.fromData(bytes, name: 'laporan_performa.$format', mimeType: mimeType);
+        await Share.shareXFiles([xfile], text: 'Laporan Performa Tim');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Berhasil diunduh! Silakan cek file pada platform Anda.')),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal mengunduh laporan. Silakan coba lagi.')),
+      );
+    }
   }
 }

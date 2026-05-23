@@ -1,7 +1,6 @@
 # 📱 Sedya Mobile App
 
 Sedya Mobile adalah aplikasi manajemen proyek (Project Management) dan evaluasi kinerja SDM berbasis seluler yang dirancang untuk membantu tim dan perusahaan mengelola tugas, merencanakan sprint, serta mengevaluasi kinerja anggota tim secara kolaboratif. Aplikasi ini terintegrasi langsung dengan backend web Laravel.
-
 ---
 
 ## 🌟 Fitur Utama
@@ -55,6 +54,12 @@ lib/
 ---
 
 ## 📈 Log Perubahan & Progress (Changelog)
+
+### **Versi 1.0.0-rc.2 (Final UI/UX Polish & Ekstensi Fitur)**
+- **Refinement UI/UX & Dark Mode Dinamis**: Mengubah *state* `AppColors` menjadi dinamis merespons pergantian tema, menambahkan *Empty States* visual berilustrasi modern, serta mengimplementasikan *Skeleton Loading* (animasi shimmer) di seluruh layar menggantikan indikator *loading* konvensional.
+- **Riwayat Aktivitas & Manipulasi Anggota**: Menambahkan tab "Riwayat" pada Detail Tugas untuk memantau jejak audit proyek, dan melengkapi fungsionalitas manajemen anggota proyek oleh *Leader* (ubah *role* dan nonaktifkan anggota).
+- **Integrasi Multimedia & Berkas**: Menyelesaikan integrasi unggah gambar (Kamera/Galeri) di fitur Catatan Tugas, serta fungsionalitas Unduh Laporan (PDF/CSV) di dasbor HR yang diintegrasikan langsung dengan sistem bawaan perangkat (Share/Save As).
+- **Push Notification & Gabung Proyek Cerdas**: Memperbaiki alur bergabung proyek menggunakan Kode Referral untuk rute API mobile, dan mengaktifkan fungsionalitas notifikasi cerdas (*smart routing*) berbasis FCM yang dapat langsung mengarahkan layar pengguna ke Detail Tugas/Proyek spesifik setelah notifikasi diklik.
 
 ### **Versi 1.0.0-rc.1 (Sinkronisasi Backend & Fix Lifecycle)**
 - **Pemisahan Environment (Local & Production)**: Mengonfigurasi ulang `api_config.dart` untuk mempermudah peralihan rute API dari *Local Development* ke *Production Hosting* (Railway) tanpa bentrok.

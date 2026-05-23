@@ -105,13 +105,13 @@ class TaskService {
     if (kIsWeb && imageWeb != null) {
       final bytes = await imageWeb.readAsBytes();
       files.add(http.MultipartFile.fromBytes(
-        'gambar', // INFO: Pastikan ke teman backend-mu, nama parameter API-nya 'gambar', 'image', atau 'foto'?
+        'attachment', 
         bytes,
         filename: imageWeb.name,
       ));
     } else if (!kIsWeb && imageFile != null) {
       files.add(await http.MultipartFile.fromPath(
-        'gambar', // Samakan nama parameter ini dengan yang di atas
+        'attachment', 
         imageFile.path,
       ));
     }

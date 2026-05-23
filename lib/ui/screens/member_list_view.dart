@@ -10,12 +10,14 @@ class MemberListView extends StatefulWidget {
   final int projectId;
   final List<ProjectMember> members;
   final String userRole;
+  final VoidCallback? onRefresh;
 
   const MemberListView({
     super.key,
     required this.projectId,
     required this.members,
     required this.userRole,
+    this.onRefresh,
   });
 
   @override
@@ -88,6 +90,7 @@ class _MemberListViewState extends State<MemberListView> {
                         );
                         // CATATAN: Untuk update layar otomatis setelah berhasil, kamu harus merefresh ulang datanya
                         // Karena file ini dipisah, kamu bisa panggil reload dari parent screen-nya nanti
+                        widget.onRefresh?.call();
                       }
                     },
                   ),
@@ -115,6 +118,7 @@ class _MemberListViewState extends State<MemberListView> {
                         backgroundColor: resp.success ? Colors.green : Colors.red,
                       ),
                     );
+                    widget.onRefresh?.call();
                   }
                 },
                 child: isSaving
