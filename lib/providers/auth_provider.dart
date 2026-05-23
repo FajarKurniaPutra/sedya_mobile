@@ -20,11 +20,16 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitialized = false;
 
+  bool _biometricEnabled = false;
+  bool _biometricUnlocked = true;
+
   AppUser? get currentUser => _currentUser;
   String? get token => _token;
   bool get isLoggedIn => _currentUser != null && _token != null;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
+  bool get biometricEnabled => _biometricEnabled;
+  bool get biometricUnlocked => _biometricUnlocked;
 
   /// Role user saat ini di konteks project tertentu
   String get userRole => _currentUser?.role ?? 'Anggota';
@@ -38,8 +43,12 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _token = prefs.getString(ApiConfig.tokenKey);
       final userJson = prefs.getString(ApiConfig.userKey);
+      _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
 
       if (_token != null && userJson != null) {
+        if (_biometricEnabled) {
+          _biometricUnlocked = false;
+        }
         _currentUser = AppUser.fromJson(jsonDecode(userJson));
         // Verifikasi token masih valid via API
         final resp = await _api.get('/user');
@@ -57,6 +66,18 @@ class AuthProvider extends ChangeNotifier {
 
     _isInitialized = true;
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> setBiometricEnabled(bool val) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('biometric_enabled', val);
+    _biometricEnabled = val;
+    notifyListeners();
+  }
+
+  void unlockBiometric() {
+    _biometricUnlocked = true;
     notifyListeners();
   }
 

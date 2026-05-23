@@ -15,10 +15,32 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _handleLogout() async {
-    final auth = context.read<AuthProvider>();
-    await auth.logout();
-    if (mounted) {
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Konfirmasi Logout'),
+        content: const Text('Apakah Anda yakin ingin keluar dari aplikasi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Keluar', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (!mounted) return;
+      final auth = context.read<AuthProvider>();
+      await auth.logout();
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
     }
   }
 
@@ -108,6 +130,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ? ThemeMode.dark
                         : ThemeMode.light;
                   });
+                },
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: SwitchListTile(
+                title: const Text('Kunci Layar Biometrik'),
+                subtitle: const Text('Gunakan Fingerprint/Face ID untuk masuk'),
+                value: auth.biometricEnabled,
+                activeColor: AppColors.primary,
+                secondary: const Icon(LucideIcons.fingerprint),
+                onChanged: (val) async {
+                  await context.read<AuthProvider>().setBiometricEnabled(val);
                 },
               ),
             ),

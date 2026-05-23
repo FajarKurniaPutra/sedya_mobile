@@ -7,6 +7,7 @@ import 'ui/screens/login_screen.dart';
 import 'ui/screens/project_list_screen.dart';
 import 'ui/screens/settings_screen.dart';
 import 'ui/screens/notification_screen.dart';
+import 'ui/screens/biometric_lock_screen.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -112,11 +113,13 @@ class _SedyaAppState extends State<SedyaApp> {
                 );
               }
               // Jika sudah login, langsung ke project list
-              if (auth.isLoggedIn) {
-                return const ProjectListScreen();
+              if (!auth.isLoggedIn) {
+                return const LoginScreen();
               }
-              // Jika belum login, tampilkan login screen
-              return const LoginScreen();
+              if (auth.biometricEnabled && !auth.biometricUnlocked) {
+                return const BiometricLockScreen();
+              }
+              return const ProjectListScreen();
             },
           ),
           routes: {

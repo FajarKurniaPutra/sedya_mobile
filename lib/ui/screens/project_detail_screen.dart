@@ -34,6 +34,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
   List<TaskItem> _tasks = [];
   List<Sprint> _sprints = [];
   bool _isLoading = true;
+  bool _filterMyTasks = false;
+  String _sortOrder = 'Status: Default'; // Default, TODO->DONE, DONE->TODO
   String _userRole = 'Anggota';
 
   @override
@@ -388,8 +390,20 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
           ).toList();
         }
 
-        // TODO: [TUGAS REKAN] Task 9 - Tambahkan logika menggunakan .sort() pada list 'filtered' di bawah ini untuk mengurutkan tugas berdasarkan deadline terdekat.
+        if (_filterMyTasks) {
+          final currentUser = context.read<AuthProvider>().currentUser;
+          if (currentUser != null) {
+            filtered = filtered.where((t) => t.pics.any((pic) => pic.userId == currentUser.id)).toList();
+          }
+        }
 
+        if (_sortOrder == 'TODO -> DONE') {
+          const statusOrder = {'TODO': 1, 'IN_PROGRESS': 2, 'REVIEW': 3, 'DONE': 4};
+          filtered.sort((a, b) => (statusOrder[a.status] ?? 99).compareTo(statusOrder[b.status] ?? 99));
+        } else if (_sortOrder == 'DONE -> TODO') {
+          const statusOrder = {'DONE': 1, 'REVIEW': 2, 'IN_PROGRESS': 3, 'TODO': 4};
+          filtered.sort((a, b) => (statusOrder[a.status] ?? 99).compareTo(statusOrder[b.status] ?? 99));
+        }
 
         return Padding(
           padding: const EdgeInsets.all(16.0),
@@ -417,6 +431,44 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                       child: const Icon(LucideIcons.plus),
                     ),
                   ],
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  FilterChip(
+                    label: const Text('Tugas Saya'),
+                    selected: _filterMyTasks,
+                    onSelected: (val) {
+                      setState(() {
+                        _filterMyTasks = val;
+                      });
+                      setLocalState(() {});
+                    },
+                    selectedColor: AppColors.primary.withValues(alpha: 0.2),
+                    checkmarkColor: AppColors.primary,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: _sortOrder,
+                        icon: const Icon(LucideIcons.sortDesc, size: 16),
+                        items: ['Status: Default', 'TODO -> DONE', 'DONE -> TODO']
+                            .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
+                            .toList(),
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              _sortOrder = val;
+                            });
+                            setLocalState(() {});
+                          }
+                        },
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -450,23 +502,63 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                           separatorBuilder: (ctx, i) => const SizedBox(height: 12),
                           itemBuilder: (ctx, i) {
                             final task = filtered[i];
-                            return _TaskCard(
-                              task: task,
-                              onTap: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => TaskDetailScreen(taskId: task.id, projectId: widget.projectId),
-                                  ),
-                                );
-                                // Delay refresh until after the pop animation completes
-                                // to avoid triggering notifyListeners on a dying widget
-                                if (mounted) {
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    if (mounted) _loadData();
-                                  });
+                            return Dismissible(
+                              key: ValueKey(task.id),
+                              direction: task.status == 'DONE' ? DismissDirection.none : DismissDirection.startToEnd,
+                              background: Container(
+                                alignment: Alignment.centerLeft,
+                                padding: const EdgeInsets.only(left: 24.0),
+                                decoration: BoxDecoration(
+                                  color: AppColors.statusDone,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(LucideIcons.checkCircle, color: Colors.white),
+                                    SizedBox(width: 8),
+                                    Text('Selesaikan', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                  ],
+                                ),
+                              ),
+                              confirmDismiss: (direction) async {
+                                final auth = context.read<AuthProvider>();
+                                // Simple check if user is PIC, Asisten or Leader
+                                final isLeaderOrAsisten = auth.userRole == 'Pemimpin Projek' || auth.userRole == 'Asisten' || auth.userRole == 'Pemimpin Proyek';
+                                final isPic = task.pics.any((pic) => pic.userId == auth.currentUser?.id);
+                                if (!isLeaderOrAsisten && !isPic) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Anda tidak memiliki izin menyelesaikan tugas ini.')));
+                                  return false;
                                 }
+
+                                final resp = await _taskService.updateStatus(task.id, 'Selesai');
+                                if (resp.success) {
+                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tugas ditandai selesai!')));
+                                  return true;
+                                }
+                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal menyelesaikan tugas.')));
+                                return false;
                               },
+                              onDismissed: (direction) {
+                                _loadData();
+                              },
+                              child: _TaskCard(
+                                task: task,
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => TaskDetailScreen(taskId: task.id, projectId: widget.projectId),
+                                    ),
+                                  );
+                                  // Delay refresh until after the pop animation completes
+                                  // to avoid triggering notifyListeners on a dying widget
+                                  if (mounted) {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (mounted) _loadData();
+                                    });
+                                  }
+                                },
+                              ),
                             );
                           },
                         ),

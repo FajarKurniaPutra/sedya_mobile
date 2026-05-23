@@ -55,6 +55,12 @@ lib/
 
 ## 📈 Log Perubahan & Progress (Changelog)
 
+### **Versi 1.0.0-rc.3 (Keamanan Biometrik & Interaktivitas Mobile)**
+- **Proteksi Biometrik (*Fingerprint/Face ID*)**: Menambahkan integrasi `local_auth` untuk mengamankan akses aplikasi. Pengguna dapat mengaktifkan "Kunci Layar Biometrik" pada menu pengaturan.
+- **Konfirmasi Keluar Aman**: Mengimplementasikan *Pop-up AlertDialog* setiap kali pengguna menekan tombol *Logout* demi mencegah aksi ketidaksengajaan.
+- **Penyaringan (*Filter*) & Sortir Tugas**: Fitur baru pada layar Detail Proyek yang memungkinkan pengguna menyaring tugas secara personal ("Tugas Saya") serta mengurutkan prioritas berdasarkan kemajuan status tugas (TODO -> DONE, atau sebaliknya).
+- **Interaktivitas Mobile Native (*Swipe-to-Complete*)**: Pemolesan UX dengan fungsionalitas menggeser tugas ke kanan (*swipe right*) dari daftar tugas untuk memperbarui statusnya secara instan menjadi "Selesai", lengkap dengan animasi visual dan *snackbar* respons otomatis.
+
 ### **Versi 1.0.0-rc.2 (Final UI/UX Polish & Ekstensi Fitur)**
 - **Refinement UI/UX & Dark Mode Dinamis**: Mengubah *state* `AppColors` menjadi dinamis merespons pergantian tema, menambahkan *Empty States* visual berilustrasi modern, serta mengimplementasikan *Skeleton Loading* (animasi shimmer) di seluruh layar menggantikan indikator *loading* konvensional.
 - **Riwayat Aktivitas & Manipulasi Anggota**: Menambahkan tab "Riwayat" pada Detail Tugas untuk memantau jejak audit proyek, dan melengkapi fungsionalitas manajemen anggota proyek oleh *Leader* (ubah *role* dan nonaktifkan anggota).
