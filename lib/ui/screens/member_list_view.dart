@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
 import '../../core/constants.dart';
 import '../../models/models.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import '../../services/project_service.dart';
+import '../../providers/auth_provider.dart';
 
 class MemberListView extends StatefulWidget {
   final int projectId;
@@ -134,6 +136,9 @@ class _MemberListViewState extends State<MemberListView> {
 
   @override
   Widget build(BuildContext context) {
+    final auth = context.read<AuthProvider>();
+    final currentUserId = auth.currentUser?.id;
+
     final activeMembers = widget.members.where((m) => m.user != null).toList();
     final isLeader = widget.userRole == 'Pemimpin Proyek' || widget.userRole == 'Pemimpin Projek';
     final canInvite = isLeader || widget.userRole == 'Asisten';
@@ -162,8 +167,8 @@ class _MemberListViewState extends State<MemberListView> {
                     itemBuilder: (ctx, i) {
                       final member = activeMembers[i];
                       final user = member.user!;
-                      // Mencegah leader mengubah status dirinya sendiri
-                      final isSelf = user.name == 'Dina cantik' || user.name == 'Dina'; // Sesuaikan logika login nanti
+                      // Mencegah leader mengubah status dirinya sendiri dan memberi penanda
+                      final isSelf = user.id == currentUserId;
                       
                       return Card(
                         elevation: 0,
@@ -186,8 +191,21 @@ class _MemberListViewState extends State<MemberListView> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      user.name,
+                                    Text.rich(
+                                      TextSpan(
+                                        children: [
+                                          TextSpan(text: user.name),
+                                          if (isSelf)
+                                            const TextSpan(
+                                              text: ' (Anda)',
+                                              style: TextStyle(
+                                                color: AppColors.primary,
+                                                fontStyle: FontStyle.italic,
+                                                fontWeight: FontWeight.normal,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold, 
                                         fontSize: 16,

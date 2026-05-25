@@ -383,9 +383,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
 
     return StatefulBuilder(
       builder: (context, setLocalState) {
-        List<TaskItem> filtered = _tasks;
+        List<TaskItem> filtered = List.from(_tasks);
         if (searchController.text.isNotEmpty) {
-          filtered = _tasks.where((t) =>
+          filtered = filtered.where((t) =>
             t.name.toLowerCase().contains(searchController.text.toLowerCase())
           ).toList();
         }
@@ -530,7 +530,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                                   return false;
                                 }
 
-                                final resp = await _taskService.updateStatus(task.id, 'Selesai');
+                                final resp = await _taskService.updateStatus(task.id, 'DONE');
                                 if (resp.success) {
                                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tugas ditandai selesai!')));
                                   return true;
@@ -539,6 +539,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                                 return false;
                               },
                               onDismissed: (direction) {
+                                setState(() {
+                                  _tasks.removeWhere((t) => t.id == task.id);
+                                });
                                 _loadData();
                               },
                               child: _TaskCard(
