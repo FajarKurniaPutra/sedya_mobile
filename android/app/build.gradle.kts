@@ -33,9 +33,8 @@ android {
         versionName = flutter.versionName
     }
 
-    signingConfigs INI
     signingConfigs {
-        create("debug") {
+        getByName("debug") {
             storeFile = file("debug.keystore") // Mengarah ke file keystore yang baru kita copy
             storePassword = "android"
             keyAlias = "androiddebugkey"

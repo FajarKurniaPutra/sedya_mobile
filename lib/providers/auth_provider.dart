@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -20,16 +21,11 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isInitialized = false;
 
-  bool _biometricEnabled = false;
-  bool _biometricUnlocked = true;
-
   AppUser? get currentUser => _currentUser;
   String? get token => _token;
   bool get isLoggedIn => _currentUser != null && _token != null;
   bool get isLoading => _isLoading;
   bool get isInitialized => _isInitialized;
-  bool get biometricEnabled => _biometricEnabled;
-  bool get biometricUnlocked => _biometricUnlocked;
 
   /// Role user saat ini di konteks project tertentu
   String get userRole => _currentUser?.role ?? 'Anggota';
@@ -43,15 +39,11 @@ class AuthProvider extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       _token = prefs.getString(ApiConfig.tokenKey);
       final userJson = prefs.getString(ApiConfig.userKey);
-      _biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
-
       if (_token != null && userJson != null) {
-        if (_biometricEnabled) {
-          _biometricUnlocked = false;
-        }
         _currentUser = AppUser.fromJson(jsonDecode(userJson));
-        // Verifikasi token masih valid via API
-        final resp = await _api.get('/user');
+        // Validasi token ke server (opsional, tp bagus buat security)
+        // Di sini kita sekalian fetch data user terbaru jika diperlukan.
+        final resp = await _api.get('/me');
         if (resp.success && resp.data != null) {
           _currentUser = AppUser.fromJson(resp.data);
           await _saveUserLocally(_currentUser!);
@@ -69,24 +61,13 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setBiometricEnabled(bool val) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('biometric_enabled', val);
-    _biometricEnabled = val;
-    notifyListeners();
-  }
-
-  void unlockBiometric() {
-    _biometricUnlocked = true;
-    notifyListeners();
-  }
-
   /// Login via Google Sign-In
   Future<String?> loginWithGoogle({
     required String email,
     required String username,
     required String googleId,
     String? photoUrl,
+    bool isRegistering = false,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -96,6 +77,7 @@ class AuthProvider extends ChangeNotifier {
       'username': username,
       'google_id': googleId,
       'photo_url': photoUrl,
+      'is_registering': isRegistering,
     }, withAuth: false);
 
     _isLoading = false;
@@ -123,6 +105,131 @@ class AuthProvider extends ChangeNotifier {
 
     notifyListeners();
     return resp.message.isNotEmpty ? resp.message : 'Login gagal. Coba lagi.';
+  }
+
+  /// Manual Login (Email & Password)
+  Future<String?> login({
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final resp = await _api.post('/login', body: {
+      'email': email,
+      'password': password,
+    }, withAuth: false);
+
+    _isLoading = false;
+
+    if (resp.success && resp.data != null) {
+      _token = resp.data['access_token'];
+      _currentUser = AppUser.fromJson(resp.data['user']);
+
+      await _api.saveToken(_token!);
+      await _saveUserLocally(_currentUser!);
+
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          final deviceType = kIsWeb ? 'web' : (Platform.isIOS ? 'ios' : 'android');
+          await NotificationService().registerFcmToken(fcmToken, deviceType: deviceType);
+        }
+      } catch (e) {
+        debugPrint('Gagal register FCM Token: $e');
+      }
+
+      notifyListeners();
+      return null;
+    }
+
+    notifyListeners();
+    return resp.message.isNotEmpty ? resp.message : 'Login gagal. Email atau password salah.';
+  }
+
+  /// Register (Email & Password)
+  Future<String?> register({
+    required String username,
+    required String email,
+    required String password,
+  }) async {
+    _isLoading = true;
+    notifyListeners();
+
+    final resp = await _api.post('/register', body: {
+      'username': username,
+      'email': email,
+      'password': password,
+      'is_registering': true,
+    }, withAuth: false);
+
+    _isLoading = false;
+
+    if (resp.success && resp.data != null) {
+      _token = resp.data['access_token'];
+      _currentUser = AppUser.fromJson(resp.data['user']);
+
+      await _api.saveToken(_token!);
+      await _saveUserLocally(_currentUser!);
+
+      try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null) {
+          final deviceType = kIsWeb ? 'web' : (Platform.isIOS ? 'ios' : 'android');
+          await NotificationService().registerFcmToken(fcmToken, deviceType: deviceType);
+        }
+      } catch (e) {
+        debugPrint('Gagal register FCM Token: $e');
+      }
+
+      notifyListeners();
+      return null;
+    }
+
+    notifyListeners();
+    return resp.message.isNotEmpty ? resp.message : 'Pendaftaran gagal. Periksa kembali data Anda.';
+  }
+
+  /// Update username
+  Future<String?> updateUsername(String newUsername) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    final resp = await _api.put('/user/username', body: {'username': newUsername});
+    if (resp.success) {
+      await refreshUser();
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+    
+    _isLoading = false;
+    notifyListeners();
+    return resp.message.isNotEmpty ? resp.message : 'Gagal memperbarui username';
+  }
+
+  /// Update foto profil
+  Future<String?> updateProfilePhoto(String filePath) async {
+    _isLoading = true;
+    notifyListeners();
+    
+    try {
+      final file = await http.MultipartFile.fromPath('photo', filePath);
+      final resp = await _api.postMultipart('/user/photo', files: [file]);
+      if (resp.success) {
+        await refreshUser();
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+      _isLoading = false;
+      notifyListeners();
+      return resp.message.isNotEmpty ? resp.message : 'Gagal memperbarui foto profil';
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return 'Gagal memproses file gambar';
+    }
   }
 
   /// Logout — hapus token & data lokal

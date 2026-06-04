@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../services/notification_service.dart';
 import 'package:intl/intl.dart';
 import '../widgets/skeleton.dart';
+import 'task_detail_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -41,6 +42,24 @@ class _NotificationScreenState extends State<NotificationScreen> {
     final success = await _notifService.markAsRead(notif.id).then((r) => r.success);
     if (success) {
       _loadNotifications();
+    }
+  }
+
+  Future<void> _handleNotificationTap(AppNotification notif) async {
+    await _markAsRead(notif);
+    
+    if (notif.referenceType == 'Task' && notif.referenceId != null) {
+      if (mounted) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (ctx) => TaskDetailScreen(
+              taskId: notif.referenceId!,
+              projectId: 0, // projectId diambil dari task detail API
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -83,8 +102,8 @@ class _NotificationScreenState extends State<NotificationScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(LucideIcons.bellOff, size: 48, color: AppColors.textSecondary.withValues(alpha: 0.5)),
-                            const SizedBox(height: 16),
-                            const Text(
+                            SizedBox(height: 16),
+                            Text(
                               'Belum ada notifikasi',
                               style: TextStyle(color: AppColors.textSecondary),
                             ),
@@ -103,7 +122,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                               : '';
                           
                           return InkWell(
-                            onTap: () => _markAsRead(notif),
+                            onTap: () => _handleNotificationTap(notif),
                             borderRadius: BorderRadius.circular(12),
                             child: Container(
                               padding: const EdgeInsets.all(16),
@@ -138,10 +157,10 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                             fontWeight: notif.isRead ? FontWeight.normal : FontWeight.bold,
                                           ),
                                         ),
-                                        const SizedBox(height: 8),
+                                        SizedBox(height: 8),
                                         Text(
                                           dateStr,
-                                          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                                          style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                                         ),
                                       ],
                                     ),
@@ -151,7 +170,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                                       width: 8,
                                       height: 8,
                                       margin: const EdgeInsets.only(top: 8),
-                                      decoration: const BoxDecoration(
+                                      decoration: BoxDecoration(
                                         color: AppColors.primary,
                                         shape: BoxShape.circle,
                                       ),

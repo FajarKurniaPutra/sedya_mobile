@@ -55,121 +55,133 @@ class _HRDashboardViewState extends State<HRDashboardView> {
                 'Performa Tim',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
-              OutlinedButton.icon(
-                onPressed: () => _showDownloadDialog(context),
-                icon: const Icon(LucideIcons.download, size: 16),
-                label: const Text('Unduh Laporan'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              )
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           Expanded(
             child: _members.isEmpty
-                ? const Center(child: Text('Belum ada data performa', style: TextStyle(color: AppColors.textSecondary)))
+                ? Center(child: Text('Belum ada data performa', style: TextStyle(color: AppColors.textSecondary)))
                 : RefreshIndicator(
                     onRefresh: _loadData,
-                    child: ListView.separated(
-                      itemCount: _members.length,
-                      separatorBuilder: (ctx, i) => const SizedBox(height: 12),
-                      itemBuilder: (ctx, i) {
-                        final member = _members[i];
-                        Color statusColor;
-                        switch (member.badge) {
-                          case 'Optimal':
+                    child: ListView(
+                      children: [
+                        _buildEvaluationSummary(),
+                        const SizedBox(height: 16),
+                        ..._members.map((member) {
+                          Color statusColor;
+                          if (!member.isActive) {
+                            statusColor = Colors.grey;
+                          } else if (member.badge.contains('Optimal') || member.badge.contains('Teladan')) {
                             statusColor = AppColors.statusDone;
-                            break;
-                          case 'Perlu Review':
+                          } else if (member.badge.contains('Review')) {
                             statusColor = AppColors.statusInProgress;
-                            break;
-                          default:
+                          } else {
                             statusColor = AppColors.statusOverdue;
-                        }
-
-                        return Card(
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: const BorderSide(color: AppColors.border),
-                          ),
-                          color: AppColors.surface,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        member.username,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        member.badge,
-                                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Text(
-                                      member.role,
-                                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
-                                    ),
-                                    const Spacer(),
-                                    Text(
-                                      'Skor: ${member.score}',
-                                      style: TextStyle(
-                                        color: statusColor,
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          }
+                          
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                side: BorderSide(color: AppColors.border),
+                              ),
+                              color: AppColors.surface,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Column(
                                   children: [
                                     Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Icon(LucideIcons.checkCircle2, color: AppColors.statusDone, size: 16),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${member.done} Diselesaikan',
-                                          style: const TextStyle(color: AppColors.statusDone, fontSize: 12),
+                                        Expanded(
+                                          child: Text(
+                                            member.username,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: statusColor.withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            !member.isActive ? 'Nonaktif' : member.badge,
+                                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: statusColor),
+                                          ),
                                         ),
                                       ],
                                     ),
+                                    const SizedBox(height: 4),
                                     Row(
                                       children: [
-                                        const Icon(LucideIcons.clock, color: AppColors.statusOverdue, size: 16),
-                                        const SizedBox(width: 4),
                                         Text(
-                                          '${member.delayed} Tertunda',
-                                          style: const TextStyle(color: AppColors.statusOverdue, fontSize: 12),
+                                          member.role,
+                                          style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
                                         ),
+                                        const Spacer(),
+                                        if (member.isActive)
+                                          Text(
+                                            'Skor: ${member.score}',
+                                            style: TextStyle(
+                                              color: statusColor,
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                       ],
                                     ),
+                                    if (!member.isActive && member.deactivationReason != null) ...[
+                                      const SizedBox(height: 8),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          'Alasan: ${member.deactivationReason}',
+                                          style: const TextStyle(fontSize: 12, color: Colors.grey, fontStyle: FontStyle.italic),
+                                        ),
+                                      ),
+                                    ] else if (member.isActive) ...[
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(LucideIcons.checkCircle2, color: AppColors.statusDone, size: 16),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                '${member.done} Diselesaikan',
+                                                style: TextStyle(color: AppColors.statusDone, fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                          Row(
+                                            children: [
+                                              Icon(LucideIcons.clock, color: AppColors.statusOverdue, size: 16),
+                                              SizedBox(width: 4),
+                                              Text(
+                                                '${member.delayed} Tertunda',
+                                                style: TextStyle(color: AppColors.statusOverdue, fontSize: 12),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ],
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        }).toList(),
+                      ],
                     ),
                   ),
           ),
@@ -178,63 +190,54 @@ class _HRDashboardViewState extends State<HRDashboardView> {
     );
   }
 
-  void _showDownloadDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Pilih Format Laporan', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                IconButton(icon: const Icon(LucideIcons.x), onPressed: () => Navigator.pop(ctx)),
-              ],
+  Widget _buildEvaluationSummary() {
+    int optimal = _members.where((m) => m.isActive && (m.badge.contains('Optimal') || m.badge.contains('Teladan'))).length;
+    int critical = _members.where((m) => m.isActive && m.badge.contains('Kritis')).length;
+    int review = _members.where((m) => m.isActive && m.badge.contains('Review')).length;
+    final inactiveMembers = _members.where((m) => !m.isActive).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.clipboardList, size: 18, color: AppColors.primary),
+              const SizedBox(width: 8),
+              Text(
+                'Catatan Evaluasi',
+                style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary, fontSize: 14),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '• $optimal anggota berkinerja optimal\n• $review anggota perlu direview\n• $critical anggota berada di fase kritis',
+            style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.textPrimary),
+          ),
+          if (inactiveMembers.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '• ${inactiveMembers.length} anggota dinonaktifkan:',
+              style: TextStyle(fontSize: 13, height: 1.5, color: AppColors.textPrimary),
             ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () => _downloadAndShare(ctx, 'pdf', 'application/pdf'),
-              icon: const Icon(LucideIcons.fileText),
-              label: const Text('Unduh sebagai PDF'),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _downloadAndShare(ctx, 'csv', 'text/csv'),
-              icon: const Icon(LucideIcons.fileSpreadsheet),
-              label: const Text('Unduh sebagai CSV'),
-            ),
+            ...inactiveMembers.map((m) => Padding(
+              padding: const EdgeInsets.only(left: 12, top: 4),
+              child: Text(
+                '- ${m.username}: ${m.deactivationReason ?? 'Tanpa alasan spesifik'}',
+                style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey),
+              ),
+            )),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Future<void> _downloadAndShare(BuildContext ctx, String format, String mimeType) async {
-    Navigator.pop(ctx);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sedang mengunduh laporan $format...')));
-    
-    final bytes = await _hrService.downloadReport(widget.projectId, format);
-    if (bytes != null) {
-      if (!kIsWeb) {
-        final xfile = XFile.fromData(bytes, name: 'laporan_performa.$format', mimeType: mimeType);
-        await Share.shareXFiles([xfile], text: 'Laporan Performa Tim');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-           const SnackBar(content: Text('Berhasil diunduh! Silakan cek file pada platform Anda.')),
-        );
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal mengunduh laporan. Silakan coba lagi.')),
-      );
-    }
-  }
 }

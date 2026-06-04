@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'dart:io';
-import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../global_layout.dart';
 import '../../core/constants.dart';
 import '../../models/models.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/task_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
 import '../widgets/skeleton.dart';
 
@@ -35,9 +38,8 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
   final TextEditingController _chatController = TextEditingController();
   bool _isSendingNote = false;
   bool _isPopping = false; // Guard: prevent rebuild during pop
-  final ImagePicker _picker = ImagePicker();
-  File? _gambarPilihan; // Untuk menyimpan gambar yang dipilih (Android/iOS)
-  XFile? _gambarWeb; // Untuk menangani gambar khusus di Web (Chrome)
+  XFile? _noteAttachment;
+  bool _isDescExpanded = false;
 
   @override
   void initState() {
@@ -99,10 +101,147 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
   Future<void> _updateStatus(String newDisplayStatus) async {
     final backendStatus = TaskItem.toBackendStatus(newDisplayStatus);
+    
+    if (backendStatus == _currentStatus) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada perubahan data status.')),
+      );
+      return;
+    }
+    
+    final auth = context.read<AuthProvider>();
+    final role = auth.userRole;
+    final isLeader = role == 'Pemimpin Projek' || role == 'Pemimpin Proyek';
+    final isMultiPic = (_task?.picUsers.length ?? 0) > 1;
+
+    if (isMultiPic && (backendStatus == 'REVIEW' || backendStatus == 'DONE')) {
+      if (isLeader) {
+        final noteController = TextEditingController();
+        final submitConfirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Konfirmasi Override Status'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Sebagai pemimpin, Anda menggunakan otoritas override pada tugas Multi-PIC. Berikan alasan override.'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: noteController,
+                  maxLength: 500,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'Berikan alasan override...',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+              ElevatedButton(
+                onPressed: () {
+                  if (noteController.text.trim().isEmpty) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Alasan override wajib diisi.')));
+                    return;
+                  }
+                  Navigator.pop(ctx, true);
+                },
+                child: const Text('Konfirmasi'),
+              ),
+            ],
+          ),
+        );
+
+        if (submitConfirm == true) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => const Center(child: CircularProgressIndicator()),
+          );
+          await _taskService.addNote(
+            widget.taskId,
+            '[OVERRIDE PEMIMPIN] ${noteController.text.trim()}',
+          );
+          Navigator.pop(context); // pop loading
+        } else {
+          return;
+        }
+      } else {
+        final currentUserId = auth.currentUser?.id;
+        final notes = _task?.notes ?? [];
+        final prefixCheck = backendStatus == 'REVIEW' ? '[KONFIRMASI PENINJAUAN]' : '[KONFIRMASI PENYELESAIAN]';
+        final hasConfirmed = notes.any((n) => n.userId == currentUserId && n.message.startsWith(prefixCheck));
+
+        if (!hasConfirmed) {
+          final noteController = TextEditingController();
+          final submitConfirm = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(backendStatus == 'REVIEW' ? 'Konfirmasi Peninjauan Tugas' : 'Konfirmasi Penyelesaian Tugas'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Tugas dengan lebih dari 1 PIC memerlukan catatan konfirmasi dari setiap penanggung jawab sebelum statusnya dapat diubah.'),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: noteController,
+                    maxLength: 500,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Berikan laporan pekerjaan Anda...',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                OutlinedButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+                ElevatedButton(
+                  onPressed: () {
+                    if (noteController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Catatan konfirmasi wajib diisi.')));
+                      return;
+                    }
+                    Navigator.pop(ctx, true);
+                  },
+                  child: const Text('Konfirmasi'),
+                ),
+              ],
+            ),
+          );
+
+          if (submitConfirm == true) {
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => const Center(child: CircularProgressIndicator()),
+            );
+            await _taskService.addNote(
+              widget.taskId,
+              '$prefixCheck ${noteController.text.trim()}',
+            );
+            Navigator.pop(context); // pop loading
+          } else {
+            return;
+          }
+        }
+      }
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
     final resp = await _taskService.updateStatus(widget.taskId, backendStatus);
+    
     if (mounted && !_isPopping) {
+      Navigator.pop(context);
+      
       if (resp.success) {
-        _safeSetState(() => _currentStatus = backendStatus);
+        await _loadTask();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -115,76 +254,44 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     }
   }
 
-  Future<void> _ambilGambar(ImageSource sumber) async {
+  Future<void> _pickAttachment() async {
     try {
-      final XFile? gambar = await _picker.pickImage(source: sumber);
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'txt', 'csv'],
+      );
 
-      if (gambar != null && mounted && !_isPopping) {
-        _safeSetState(() {
-          if (kIsWeb) {
-            _gambarWeb = gambar;
-          } else {
-            _gambarPilihan = File(gambar.path);
-          }
-        });
-        // TODO: Disini tempat fungsi memanggil API untuk upload gambar ke server
-        print("Berhasil memilih gambar: ${gambar.name}");
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
+        if (file.size > 2 * 1024 * 1024) {
+          if (mounted && !_isPopping) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${file.name} melebihi 2MB')));
+          return;
+        }
 
-        // Opsional: Tampilkan feedback ke pengguna
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Gambar ${gambar.name} dipilih. (Fitur upload belum disambung)',
-            ),
-          ),
-        );
+        if (mounted && !_isPopping) {
+          _safeSetState(() {
+            _noteAttachment = XFile(file.path!, name: file.name);
+          });
+        }
       }
     } catch (e) {
-      print("Error mengambil gambar: $e");
+      if (mounted && !_isPopping) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gagal memilih file')));
     }
   }
 
-  void _tampilkanPilihanMedia(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_library,
-                  color: AppColors.primary,
-                ),
-                title: const Text('Pilih dari Galeri'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _ambilGambar(ImageSource.gallery);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt, color: AppColors.primary),
-                title: const Text('Ambil Foto (Kamera)'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  _ambilGambar(ImageSource.camera);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
+
 
   Future<void> _sendNote() async {
-    // Cegah pengiriman jika teks kosong DAN tidak ada gambar
-    if (_chatController.text.trim().isEmpty &&
-        _gambarPilihan == null &&
-        _gambarWeb == null) {
+    // Cegah pengiriman jika teks kosong
+    if (_chatController.text.trim().isEmpty) {
+      if (_noteAttachment != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Catatan teks wajib diisi meskipun mengirim lampiran'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
     }
 
@@ -193,16 +300,14 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     final resp = await _taskService.addNote(
       widget.taskId,
       _chatController.text.trim(),
-      imageFile: _gambarPilihan,
-      imageWeb: _gambarWeb,
+      attachmentFile: _noteAttachment,
     );
 
     if (mounted && !_isPopping) {
       if (resp.success) {
         _chatController.clear();
         _safeSetState(() {
-          _gambarPilihan = null;
-          _gambarWeb = null;
+          _noteAttachment = null;
         });
         await _loadTask();
       } else {
@@ -224,6 +329,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (mounted && !_isPopping) {
       if (resp.success) {
         _safePop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(resp.message.isNotEmpty ? resp.message : 'Tugas berhasil dihapus'),
+            backgroundColor: Colors.green,
+          ),
+        );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -242,6 +353,37 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
     if (_isPopping) return;
     _isPopping = true;
     Navigator.of(context).pop();
+  }
+
+  Future<void> _downloadAttachment(String type, int attachmentId, String? originalName) async {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Mengunduh ${originalName ?? 'file'}...')));
+    try {
+      final bytes = await _taskService.downloadAttachment(widget.taskId, type, attachmentId);
+      if (!kIsWeb) {
+        try {
+          final dir = await getApplicationDocumentsDirectory();
+          final fileName = originalName ?? 'attachment_$attachmentId';
+          final file = File('${dir.path}/$fileName');
+          await file.writeAsBytes(bytes);
+          final xfile = XFile(file.path);
+          await Share.shareXFiles([xfile], text: 'Lampiran Tugas');
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Gagal memproses file unduhan.')),
+            );
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Berhasil diunduh! Silakan cek file pada platform Anda.')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    }
   }
 
   @override
@@ -331,7 +473,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       children: [
                         Text(
                           task.label ?? '—',
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textSecondary,
                           ),
                         ),
@@ -437,14 +579,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                   'Yakin ingin menghapus tugas "${task.name}"? Tindakan ini tidak dapat dibatalkan.',
                                 ),
                                 actions: [
-                                  TextButton(
+                                  OutlinedButton(
                                     onPressed: () => Navigator.pop(ctx),
-                                    child: const Text(
-                                      'Batal',
-                                      style: TextStyle(
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
+                                    child: const Text('Batal'),
                                   ),
                                   ElevatedButton(
                                     onPressed: () {
@@ -460,12 +597,12 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                               ),
                             );
                           },
-                          icon: const Icon(
+                          icon: Icon(
                             LucideIcons.trash2,
                             size: 16,
                             color: AppColors.statusOverdue,
                           ),
-                          label: const Text(
+                          label: Text(
                             'Hapus Tugas',
                             style: TextStyle(color: AppColors.statusOverdue),
                           ),
@@ -475,7 +612,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                               fontSize: 14,
                               fontWeight: FontWeight.w600,
                             ),
-                            side: const BorderSide(
+                            side: BorderSide(
                               color: AppColors.statusOverdue,
                             ),
                           ),
@@ -486,7 +623,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                     if (task.deadline != null)
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             LucideIcons.calendar,
                             size: 16,
                             color: AppColors.textSecondary,
@@ -494,7 +631,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           const SizedBox(width: 8),
                           Text(
                             'Deadline: ${formatter.format(task.deadline!)}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: AppColors.textSecondary,
                             ),
                           ),
@@ -529,7 +666,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  const Text(
+                                  Text(
                                     'PIC Tugas',
                                     style: TextStyle(
                                       fontSize: 10,
@@ -568,7 +705,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
-                              const Text(
+                              Text(
                                 'PIC Tugas',
                                 style: TextStyle(
                                   fontSize: 10,
@@ -589,29 +726,77 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      (task.description != null && task.description!.isNotEmpty)
-                          ? task.description!
-                          : 'Tidak ada deskripsi',
-                      style: TextStyle(
-                        height: 1.5,
-                        color:
-                            (task.description != null &&
-                                task.description!.isNotEmpty)
-                            ? null
-                            : AppColors.textSecondary,
-                        fontStyle:
-                            (task.description != null &&
-                                task.description!.isNotEmpty)
-                            ? FontStyle.normal
-                            : FontStyle.italic,
+                    if (task.description == null || task.description!.isEmpty)
+                      Text(
+                        'Tidak ada deskripsi',
+                        style: TextStyle(
+                          height: 1.5,
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      )
+                    else
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task.description!,
+                            maxLines: _isDescExpanded ? null : 3,
+                            overflow: _isDescExpanded ? null : TextOverflow.ellipsis,
+                            style: const TextStyle(height: 1.5),
+                          ),
+                          if (task.description!.length > 100 || '\n'.allMatches(task.description!).length > 2)
+                            GestureDetector(
+                              onTap: () {
+                                _safeSetState(() {
+                                  _isDescExpanded = !_isDescExpanded;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Text(
+                                  _isDescExpanded ? 'Tampilkan lebih sedikit' : 'Tampilkan semua deskripsi',
+                                  style: TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 32),
-                    const Divider(color: AppColors.border),
+                    
+                    if (task.images.isNotEmpty || task.documents.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        'Lampiran Tugas',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8, runSpacing: 8,
+                        children: [
+                          ...task.images.map((img) => ActionChip(
+                            label: Text(img.originalName ?? 'Gambar', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                            avatar: Icon(LucideIcons.image, size: 14, color: AppColors.primary),
+                            onPressed: () => _downloadAttachment('images', img.id, img.originalName),
+                          )),
+                          ...task.documents.map((doc) => ActionChip(
+                            label: Text(doc.originalName ?? 'Dokumen', style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                            avatar: Icon(LucideIcons.fileText, size: 14, color: AppColors.primary),
+                            onPressed: () => _downloadAttachment('documents', doc.id, doc.originalName),
+                          )),
+                        ],
+                      ),
+                    ],
+                    SizedBox(height: 32),
+                    Divider(color: AppColors.border),
                     const SizedBox(height: 16),
                     const Text(
-                      'Catatan',
+                      'Diskusi Tugas',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -621,7 +806,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
 
                     // Notes/Chat list
                     if (task.notes.isEmpty)
-                      const Center(
+                      Center(
                         child: Padding(
                           padding: EdgeInsets.all(24),
                           child: Text(
@@ -661,8 +846,9 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                 const SizedBox(width: 8),
                               ],
                               Flexible(
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
+                                child: IntrinsicWidth(
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
                                     color: isMe
                                         ? AppColors.primary
@@ -687,7 +873,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                       if (!isMe)
                                         Text(
                                           note.sender?.name ?? 'Unknown',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 10,
                                             fontWeight: FontWeight.bold,
                                             color: AppColors.textSecondary,
@@ -703,9 +889,51 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                                           fontSize: 14,
                                         ),
                                       ),
+                                      if (note.documents.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        ...note.documents.map((doc) => GestureDetector(
+                                          onTap: () => _downloadAttachment('note-documents', doc.id, doc.originalName),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            margin: const EdgeInsets.only(top: 4),
+                                            decoration: BoxDecoration(
+                                              color: isMe ? Colors.white.withValues(alpha: 0.2) : AppColors.primary.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Icon(LucideIcons.paperclip, size: 12, color: isMe ? Colors.white : AppColors.primary),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    doc.originalName ?? 'Lampiran',
+                                                    style: TextStyle(fontSize: 11, color: isMe ? Colors.white : AppColors.primary),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ))
+                                      ],
+                                      if (note.createdAt != null) ...[
+                                        const SizedBox(height: 4),
+                                        Align(
+                                          alignment: Alignment.bottomRight,
+                                          child: Text(
+                                            DateFormat('HH:mm').format(note.createdAt!),
+                                            style: TextStyle(
+                                              color: isMe ? Colors.white70 : AppColors.textSecondary,
+                                              fontSize: 10,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
+                              ),
                               ),
                               if (isMe) const SizedBox(width: 24),
                             ],
@@ -721,7 +949,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
           // Sticky Footer Chat Input
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.surface,
               border: Border(top: BorderSide(color: AppColors.border)),
             ),
@@ -729,58 +957,33 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // --- PREVIEW GAMBAR JIKA ADA ---
-                  if (_gambarPilihan != null || _gambarWeb != null)
+                  // --- PREVIEW FILE JIKA ADA ---
+                  if (_noteAttachment != null)
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,
                         vertical: 8,
                       ),
                       alignment: Alignment.centerLeft,
-                      child: Stack(
-                        children: [
-                          Container(
-                            height: 80,
-                            width: 80,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.border),
-                              image: DecorationImage(
-                                fit: BoxFit.cover,
-                                image: kIsWeb && _gambarWeb != null
-                                    ? NetworkImage(_gambarWeb!.path)
-                                          as ImageProvider
-                                    : FileImage(_gambarPilihan!),
-                              ),
-                            ),
-                          ),
-                          Positioned(
-                            right: -10,
-                            top: -10,
-                            child: IconButton(
-                              icon: const Icon(Icons.cancel, color: Colors.red),
-                              onPressed: () {
-                                _safeSetState(() {
-                                  _gambarPilihan = null;
-                                  _gambarWeb = null;
-                                });
-                              },
-                            ),
-                          ),
-                        ],
+                      child: Chip(
+                        label: Text(_noteAttachment!.name, style: const TextStyle(fontSize: 12), overflow: TextOverflow.ellipsis),
+                        deleteIcon: const Icon(LucideIcons.x, size: 14),
+                        onDeleted: () => _safeSetState(() => _noteAttachment = null),
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                        side: BorderSide.none,
                       ),
                     ),
 
                   // -------------------------------
                   Row(
                     children: [
-                      // TOMBOL KAMERA
+                      // TOMBOL FILE
                       IconButton(
-                        icon: const Icon(
-                          LucideIcons.camera,
+                        icon: Icon(
+                          LucideIcons.paperclip,
                           color: AppColors.primary,
                         ),
-                        onPressed: () => _tampilkanPilihanMedia(context),
+                        onPressed: _pickAttachment,
                       ),
                       Expanded(
                         child: TextField(
@@ -793,13 +996,13 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
-                              borderSide: const BorderSide(
+                              borderSide: BorderSide(
                                 color: AppColors.border,
                               ),
                             ),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(24),
-                              borderSide: const BorderSide(
+                              borderSide: BorderSide(
                                 color: AppColors.border,
                               ),
                             ),
@@ -807,7 +1010,7 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                           onSubmitted: (_) => _sendNote(),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       CircleAvatar(
                         backgroundColor: AppColors.primary,
                         child: _isSendingNote
@@ -833,9 +1036,10 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                 ],
               ),
             ),
-          ),
-                  ), // End of Tab 1 Column
-                  // --- TAB 2: Riwayat Aktivitas ---
+            ),
+          ],
+        ), // End of Tab 1 Column
+        // --- TAB 2: Riwayat Aktivitas ---
                   RefreshIndicator(
                     onRefresh: _loadTask,
                     child: _logs.isEmpty
@@ -843,51 +1047,105 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
                             physics: const AlwaysScrollableScrollPhysics(),
                             child: SizedBox(
                               height: MediaQuery.of(context).size.height * 0.6,
-                              child: const Center(
+                              child: Center(
                                 child: Text('Belum ada riwayat aktivitas', style: TextStyle(color: AppColors.textSecondary)),
                               ),
                             ),
                           )
-                        : ListView.separated(
-                            padding: const EdgeInsets.all(16),
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                             physics: const AlwaysScrollableScrollPhysics(),
                             itemCount: _logs.length,
-                            separatorBuilder: (ctx, i) => const SizedBox(height: 12),
                             itemBuilder: (ctx, i) {
                               final log = _logs[i];
+                              final isLast = i == _logs.length - 1;
                               final time = log.createdAt != null
-                                  ? DateFormat('dd MMM yyyy, HH:mm').format(log.createdAt!)
+                                  ? DateFormat('dd MMM, HH.mm').format(log.createdAt!)
                                   : '';
-                              return Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CircleAvatar(
-                                    radius: 16,
-                                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                                    foregroundColor: AppColors.primary,
-                                    child: Text(
-                                      log.user?.name.isNotEmpty == true ? log.user!.name[0] : '?',
-                                      style: const TextStyle(fontSize: 12),
+                              
+                              // Determine icon & color based on action type
+                              IconData iconData;
+                              Color iconBgColor;
+                              
+                              switch (log.action) {
+                                case 'status_changed':
+                                  iconData = LucideIcons.refreshCcw;
+                                  iconBgColor = const Color(0xFF1976D2); // Blue
+                                  break;
+                                case 'note_added':
+                                  iconData = LucideIcons.messageSquare;
+                                  iconBgColor = const Color(0xFFF59E0B); // Amber/Orange
+                                  break;
+                                case 'updated':
+                                  iconData = LucideIcons.info;
+                                  iconBgColor = const Color(0xFF607D8B); // Blue Grey
+                                  break;
+                                case 'created':
+                                  iconData = LucideIcons.plusCircle;
+                                  iconBgColor = const Color(0xFF4CAF50); // Green
+                                  break;
+                                default:
+                                  iconData = LucideIcons.activity;
+                                  iconBgColor = Colors.grey;
+                              }
+
+                              return IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Timeline column: icon + line
+                                    SizedBox(
+                                      width: 36,
+                                      child: Column(
+                                        children: [
+                                          Container(
+                                            width: 36,
+                                            height: 36,
+                                            decoration: BoxDecoration(
+                                              color: iconBgColor,
+                                              shape: BoxShape.circle,
+                                            ),
+                                            child: Icon(iconData, size: 18, color: Colors.white),
+                                          ),
+                                          if (!isLast)
+                                            Expanded(
+                                              child: Container(
+                                                width: 2,
+                                                margin: const EdgeInsets.symmetric(vertical: 4),
+                                                color: AppColors.border,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          log.action,
-                                          style: const TextStyle(fontSize: 14),
+                                    const SizedBox(width: 14),
+                                    // Content column
+                                    Expanded(
+                                      child: Padding(
+                                        padding: EdgeInsets.only(bottom: isLast ? 0 : 20, top: 2),
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                log.description,
+                                                style: const TextStyle(fontSize: 14, height: 1.4),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 2),
+                                              child: Text(
+                                                time,
+                                                style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          time,
-                                          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                                        ),
-                                      ],
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               );
                             },
                           ),
@@ -973,12 +1231,16 @@ class _TaskEditModalState extends State<_TaskEditModal> {
   }
 
   Future<void> _pickDeadline() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initialDate = _selectedDeadline ?? today.add(const Duration(days: 7));
+    final firstDate = initialDate.isBefore(today) ? initialDate : today;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate:
-          _selectedDeadline ?? DateTime.now().add(const Duration(days: 7)),
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: DateTime(2100),
     );
     if (picked != null && mounted) {
       setState(() {
@@ -991,6 +1253,44 @@ class _TaskEditModalState extends State<_TaskEditModal> {
   Future<void> _saveTask() async {
     if (_nameController.text.trim().isEmpty) {
       setState(() => _errorText = 'Nama tugas wajib diisi');
+      return;
+    }
+
+    final currentName = widget.task.name;
+    final currentDesc = widget.task.description ?? '';
+    final currentDeadline = widget.task.deadline;
+    final currentWeight = widget.task.weight;
+    final currentLabel = widget.task.label;
+    final currentPriority = widget.task.priority;
+    final currentPicIds = widget.task.picUsers.map((u) => u.id).toSet();
+    final newPicIds = _selectedPics.map((u) => u.id).toSet();
+
+    final isNameChanged = _nameController.text.trim() != currentName;
+    final isDescChanged = _descController.text.trim() != currentDesc;
+    
+    bool isDeadlineChanged = false;
+    if (_selectedDeadline == null && currentDeadline != null) isDeadlineChanged = true;
+    if (_selectedDeadline != null && currentDeadline == null) isDeadlineChanged = true;
+    if (_selectedDeadline != null && currentDeadline != null) {
+      if (_selectedDeadline!.year != currentDeadline.year ||
+          _selectedDeadline!.month != currentDeadline.month ||
+          _selectedDeadline!.day != currentDeadline.day) {
+        isDeadlineChanged = true;
+      }
+    }
+
+    final newWeight = int.tryParse(_weightController.text) ?? 1;
+    final isWeightChanged = newWeight != currentWeight;
+    final isLabelChanged = _selectedLabel != currentLabel;
+    final isPriorityChanged = _selectedPriority != currentPriority;
+    
+    bool isPicsChanged = currentPicIds.length != newPicIds.length || !currentPicIds.containsAll(newPicIds);
+
+    if (!isNameChanged && !isDescChanged && !isDeadlineChanged && !isWeightChanged && !isLabelChanged && !isPriorityChanged && !isPicsChanged) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tidak ada perubahan data.')),
+      );
+      Navigator.pop(context);
       return;
     }
 
@@ -1015,6 +1315,14 @@ class _TaskEditModalState extends State<_TaskEditModal> {
     if (mounted) {
       setState(() => _isSaving = false);
       if (resp.success) {
+        final msg = resp.message.isNotEmpty ? resp.message : 'Tugas berhasil diperbarui';
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.green,
+          ),
+        );
         widget.onSaved();
       } else {
         setState(
@@ -1077,7 +1385,7 @@ class _TaskEditModalState extends State<_TaskEditModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       LucideIcons.alertCircle,
                       size: 16,
                       color: AppColors.statusOverdue,
@@ -1086,7 +1394,7 @@ class _TaskEditModalState extends State<_TaskEditModal> {
                     Expanded(
                       child: Text(
                         _errorText!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.statusOverdue,
                           fontSize: 13,
                         ),

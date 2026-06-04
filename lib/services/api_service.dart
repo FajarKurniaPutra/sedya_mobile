@@ -158,12 +158,23 @@ class ApiService {
     final success = response.statusCode >= 200 && response.statusCode < 300;
 
     if (!success && data is Map<String, dynamic>) {
-      message = data['message'] ?? data['error'] ?? 'Terjadi kesalahan pada server.';
+      if (data.containsKey('errors') && data['errors'] is Map) {
+        final errors = data['errors'] as Map;
+        if (errors.isNotEmpty) {
+          message = errors.values.first[0].toString();
+        }
+      } else {
+        message = data['message'] ?? data['error'] ?? 'Terjadi kesalahan pada server.';
+      }
     }
 
     if (response.statusCode == 401) {
-      message = 'Sesi telah berakhir. Silakan login kembali.';
-      clearToken(); // auto-clear expired token
+      if (response.request?.url.path.endsWith('/login') ?? false) {
+          // Keep the original message for login failure
+      } else {
+          message = 'Sesi telah berakhir. Silakan login kembali.';
+          clearToken(); // auto-clear expired token
+      }
     }
 
     return ApiResponse(

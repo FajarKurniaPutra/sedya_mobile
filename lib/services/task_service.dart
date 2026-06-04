@@ -1,7 +1,11 @@
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../core/api_config.dart';
 import '../models/models.dart';
 import 'api_service.dart';
 
@@ -87,12 +91,11 @@ class TaskService {
     return _api.delete('/tasks/$taskId');
   }
 
-  /// Tambah catatan/note ke task (Mendukung pengiriman gambar)
+  /// Tambah catatan/note ke task (Mendukung pengiriman file)
   Future<ApiResponse> addNote(
     int taskId, 
     String message, {
-    File? imageFile, 
-    XFile? imageWeb,
+    XFile? attachmentFile,
   }) async {
     // Siapkan teks catatannya
     final Map<String, String> fields = {
@@ -101,18 +104,12 @@ class TaskService {
 
     List<http.MultipartFile> files = [];
 
-    // Proses file gambar (Web vs Android/iOS)
-    if (kIsWeb && imageWeb != null) {
-      final bytes = await imageWeb.readAsBytes();
+    if (attachmentFile != null) {
+      final bytes = await attachmentFile.readAsBytes();
       files.add(http.MultipartFile.fromBytes(
-        'attachment', 
+        'attachments[]', 
         bytes,
-        filename: imageWeb.name,
-      ));
-    } else if (!kIsWeb && imageFile != null) {
-      files.add(await http.MultipartFile.fromPath(
-        'attachment', 
-        imageFile.path,
+        filename: attachmentFile.name,
       ));
     }
 
@@ -127,9 +124,65 @@ class TaskService {
   /// Ambil log history task
   Future<List<ActivityLog>> getTaskLogs(int taskId) async {
     final resp = await _api.get('/tasks/$taskId/logs');
-    if (resp.success && resp.data is List) {
-      return (resp.data as List).map((j) => ActivityLog.fromJson(j)).toList();
+    if (resp.success) {
+      if (resp.data is List) {
+        return (resp.data as List).map((j) => ActivityLog.fromJson(j)).toList();
+      } else if (resp.data is Map && resp.data['data'] is List) {
+        return (resp.data['data'] as List).map((j) => ActivityLog.fromJson(j)).toList();
+      }
     }
     return [];
+  }
+
+  /// Upload file attachments ke task (maks 5)
+  Future<ApiResponse> uploadAttachments(int taskId, List<PlatformFile> platformFiles) async {
+    List<http.MultipartFile> files = [];
+
+    for (var pf in platformFiles) {
+      if (kIsWeb && pf.bytes != null) {
+        files.add(http.MultipartFile.fromBytes(
+          'attachments[]',
+          pf.bytes!,
+          filename: pf.name,
+        ));
+      } else if (!kIsWeb && pf.path != null) {
+        files.add(await http.MultipartFile.fromPath(
+          'attachments[]',
+          pf.path!,
+          filename: pf.name,
+        ));
+      }
+    }
+
+    if (files.isEmpty) return ApiResponse(success: false, message: 'Tidak ada file valid yang diplih');
+
+    return _api.postMultipart(
+      '/tasks/$taskId/attachments',
+      fields: {},
+      files: files,
+    );
+  }
+
+  /// Unduh file attachment (type = 'images' | 'documents' | 'note-documents')
+  Future<Uint8List> downloadAttachment(int taskId, String type, int attachmentId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    if (token == null) throw Exception('Tidak ada token autentikasi.');
+
+    final url = Uri.parse('${ApiConfig.apiUrl}/tasks/$taskId/$type/$attachmentId/download');
+    
+    final response = await http.get(
+      url,
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Accept': 'application/json',
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      return response.bodyBytes;
+    } else {
+      throw Exception('Gagal mengunduh. Status: ${response.statusCode}. Pesan: ${response.body}');
+    }
   }
 }

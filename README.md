@@ -55,6 +55,15 @@ lib/
 
 ## 📈 Log Perubahan & Progress (Changelog)
 
+### **Versi 1.1.0-final (Production Readiness & UI/UX Polish)**
+- **Refactoring UI Riwayat Aktivitas**: Menyelaraskan tampilan *timeline* riwayat tugas (*activity log*) agar 100% konsisten dengan versi Web, lengkap dengan ikon spesifik dan teks deskripsi ramah pengguna.
+- **Validasi Mandatory & Blokir Tanggal**: Kolom `Deadline` kini wajib diisi (*mandatory* ditandai bintang merah) dan kalender otomatis memblokir pemilihan tanggal di masa lampau (sebelum hari ini).
+- **Optimalisasi Sorting & Filter**: Menghapus opsi *Status: Default* yang redundan. Kini daftar tugas secara otomatis diurutkan dari *Antrean* hingga *Selesai* berdasarkan waktu pembuatan tugas (ID terkecil ke terbesar).
+- **Pembaruan UI Manajemen Member**: Aksi *Nonaktifkan Anggota* kini diintegrasikan langsung sebagai fitur *Switch Toggle* ke dalam modal Ubah Role, memperingkas interaksi menjadi satu alur.
+- **Fitur Read-More Deskripsi**: Menambahkan interaktivitas *Tampilkan semua deskripsi* pada halaman Detail Tugas untuk membatasi panjang teks deskripsi secara *default* (maksimal 3 baris) demi menjaga proporsi UI tetap rapi.
+- **Validasi Akun Google Tertaut**: Menambahkan penanganan galat (*error handling*) khusus di sisi backend dan mobile untuk mencegah pengguna mendaftar ulang secara manual apabila email tersebut sudah terdaftar menggunakan integrasi *Google Sign-In*.
+- **Pembersihan Modul Biometrik**: Mencopot dependensi biometrik (`local_auth`) secara komprehensif demi keandalan aplikasi di berbagai *device* tanpa sensor biometrik.
+
 ### **Versi 1.0.0-rc.3 (Keamanan Biometrik & Interaktivitas Mobile)**
 - **Proteksi Biometrik (*Fingerprint/Face ID*)**: Menambahkan integrasi `local_auth` untuk mengamankan akses aplikasi. Pengguna dapat mengaktifkan "Kunci Layar Biometrik" pada menu pengaturan.
 - **Konfirmasi Keluar Aman**: Mengimplementasikan *Pop-up AlertDialog* setiap kali pengguna menekan tombol *Logout* demi mencegah aksi ketidaksengajaan.

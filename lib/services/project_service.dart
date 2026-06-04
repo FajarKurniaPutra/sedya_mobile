@@ -35,6 +35,7 @@ class ProjectService {
     String? code,
     String? description,
     String? phase,
+    String? type,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -45,6 +46,7 @@ class ProjectService {
         'kode_projek': code,
         'deskripsi': description,
         'tahapan_projek': phase ?? 'Perencanaan',
+        if (type != null) 'jenis_projek': type,
         'tgl_mulai': startDate?.toIso8601String().split('T')[0],
         'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
       },
@@ -65,6 +67,7 @@ class ProjectService {
     String? code,
     String? description,
     String? phase,
+    String? type,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -75,6 +78,7 @@ class ProjectService {
         'kode_projek': code,
         'deskripsi': description,
         'tahapan_projek': phase,
+        if (type != null) 'jenis_projek': type,
         'tgl_mulai': startDate?.toIso8601String().split('T')[0],
         'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
       },
@@ -109,8 +113,16 @@ class ProjectService {
   }
 
   /// Toggle status member (aktif/nonaktif)
-  Future<ApiResponse> toggleMemberStatus(int projectId, int memberId) async {
-    return _api.put('/projects/$projectId/members/$memberId/toggle-status');
+  Future<ApiResponse> toggleMemberStatus(int projectId, int memberId, {String? deactivationReason}) async {
+    return _api.put(
+      '/projects/$projectId/members/$memberId/toggle-status',
+      body: deactivationReason != null ? {'deactivation_reason': deactivationReason} : null,
+    );
+  }
+
+  /// Keluarkan anggota dari proyek (hanya bisa jika status nonaktif)
+  Future<ApiResponse> removeMember(int projectId, int memberId) async {
+    return _api.delete('/projects/$projectId/members/$memberId');
   }
 
   /// Mengubah role anggota proyek (khusus Pemimpin Proyek)
@@ -131,7 +143,8 @@ class ProjectService {
   Future<ApiResponse> toggleMemberStatusByUser(
     int projectId,
     int memberUserId,
+    {String? deactivationReason}
   ) async {
-    return _api.put('/projects/$projectId/members/$memberUserId/toggle-status');
+    return toggleMemberStatus(projectId, memberUserId, deactivationReason: deactivationReason);
   }
 }

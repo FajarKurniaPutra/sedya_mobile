@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../global_layout.dart';
 import '../../core/constants.dart';
@@ -14,6 +15,91 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _pickImage(AuthProvider auth) async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mengunggah foto profil...')),
+        );
+        final error = await auth.updateProfilePhoto(image.path);
+        if (!mounted) return;
+        
+        if (error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error), backgroundColor: Colors.red),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Foto profil berhasil diperbarui!'), backgroundColor: Colors.green),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gagal memilih gambar'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _editUsername(AuthProvider auth) async {
+    final currentName = auth.currentUser?.username ?? '';
+    final TextEditingController ctrl = TextEditingController(text: currentName);
+
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ubah Username'),
+        content: TextField(
+          controller: ctrl,
+          decoration: const InputDecoration(
+            labelText: 'Username Baru',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && ctrl.text.trim().isNotEmpty && ctrl.text.trim() != currentName) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Menyimpan username...')),
+      );
+      final error = await auth.updateUsername(ctrl.text.trim());
+      if (!mounted) return;
+      
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Username berhasil diperbarui!'), backgroundColor: Colors.green),
+        );
+      }
+    }
+  }
+
   Future<void> _handleLogout() async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -60,47 +146,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Center(
               child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 48,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                    foregroundColor: AppColors.primary,
-                    child: user?.photoUrl != null
-                        ? ClipOval(
-                            child: Image.network(
-                              user!.photoUrl!,
-                              width: 96,
-                              height: 96,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Text(
-                                    user.name.isNotEmpty ? user.name[0] : '?',
-                                    style: const TextStyle(
-                                      fontSize: 32,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                  Stack(
+                    children: [
+                      CircleAvatar(
+                        radius: 48,
+                        backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                        foregroundColor: AppColors.primary,
+                        child: user?.photoUrl != null
+                            ? ClipOval(
+                                child: Image.network(
+                                  user!.photoUrl!,
+                                  width: 96,
+                                  height: 96,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) =>
+                                      Text(
+                                        user.name.isNotEmpty ? user.name[0] : '?',
+                                        style: const TextStyle(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                ),
+                              )
+                            : Text(
+                                user?.name.isNotEmpty == true ? user!.name[0] : '?',
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: auth.isLoading ? null : () => _pickImage(auth),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
                             ),
-                          )
-                        : Text(
-                            user?.name.isNotEmpty == true ? user!.name[0] : '?',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            child: const Icon(LucideIcons.camera, color: Colors.white, size: 16),
                           ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    user?.name ?? 'User',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        user?.name ?? 'User',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: auth.isLoading ? null : () => _editUsername(auth),
+                        child: Icon(LucideIcons.edit2, size: 16, color: AppColors.textSecondary),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     user?.email ?? '',
-                    style: const TextStyle(color: AppColors.textSecondary),
+                    style: TextStyle(color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -112,7 +228,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'Pengaturan Aplikasi',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -120,8 +236,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 border: Border.all(color: AppColors.border),
               ),
               child: SwitchListTile(
-                title: const Text('Tema Aplikasi (Dark Mode)'),
-                secondary: const Icon(LucideIcons.moon),
+                title: Text('Tema Aplikasi (Dark Mode)'),
+                secondary: Icon(LucideIcons.moon),
                 value: themeNotifier.value == ThemeMode.dark,
                 activeThumbColor: AppColors.primary,
                 onChanged: (val) {
@@ -133,25 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: SwitchListTile(
-                title: const Text('Kunci Layar Biometrik'),
-                subtitle: const Text('Gunakan Fingerprint/Face ID untuk masuk'),
-                value: auth.biometricEnabled,
-                activeColor: AppColors.primary,
-                secondary: const Icon(LucideIcons.fingerprint),
-                onChanged: (val) async {
-                  await context.read<AuthProvider>().setBiometricEnabled(val);
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -280,16 +378,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // Logout Action
             OutlinedButton.icon(
               onPressed: _handleLogout,
-              icon: const Icon(
+              icon: Icon(
                 LucideIcons.logOut,
                 color: AppColors.statusOverdue,
               ),
-              label: const Text(
+              label: Text(
                 'Keluar',
                 style: TextStyle(color: AppColors.statusOverdue),
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.statusOverdue),
+                side: BorderSide(color: AppColors.statusOverdue),
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
             ),

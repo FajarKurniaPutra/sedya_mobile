@@ -23,6 +23,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   List<Project> _filteredProjects = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  String _filterStatus = 'Aktif';
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -50,10 +51,17 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
   }
 
   void _applySearch() {
+    List<Project> temp = _projects;
+    if (_filterStatus == 'Aktif') {
+      temp = temp.where((p) => p.statusActive).toList();
+    } else if (_filterStatus == 'Nonaktif') {
+      temp = temp.where((p) => !p.statusActive).toList();
+    }
+
     if (_searchQuery.isEmpty) {
-      _filteredProjects = List.from(_projects);
+      _filteredProjects = temp;
     } else {
-      _filteredProjects = _projects.where((p) =>
+      _filteredProjects = temp.where((p) =>
         p.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
         p.code.toLowerCase().contains(_searchQuery.toLowerCase())
       ).toList();
@@ -104,9 +112,9 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
               ],
             ),
             actions: [
-              TextButton(
+              OutlinedButton(
                 onPressed: isJoining ? null : () => Navigator.pop(ctx),
-                child: const Text('Batal', style: TextStyle(color: Colors.grey)),
+                child: const Text('Batal'),
               ),
               ElevatedButton(
                 onPressed: isJoining ? null : () async {
@@ -156,11 +164,21 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
 
   Future<void> _toggleProjectStatus(Project project) async {
     final resp = await _projectService.toggleStatus(project.id);
-    if (resp.success) {
-      _loadProjects();
-      if (mounted) {
+    if (mounted) {
+      if (resp.success) {
+        _loadProjects();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Status proyek "${project.name}" diperbarui')),
+          SnackBar(
+            content: Text(resp.message.isNotEmpty ? resp.message : 'Status proyek "${project.name}" diperbarui'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(resp.message.isNotEmpty ? resp.message : 'Gagal memperbarui status proyek'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -171,7 +189,7 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
     final auth = context.watch<AuthProvider>();
 
     return GlobalLayout(
-      title: 'Dashboard',
+      title: 'Proyek Anda',
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -179,49 +197,80 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
           children: [
             Text(
               'Selamat Datang, ${auth.currentUser?.name ?? "Pengguna"}!',
-              style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.primary),
             ),
-            const SizedBox(height: 4),
-            const Text(
+            SizedBox(height: 4),
+            Text(
               'Berikut adalah daftar proyek Anda.',
               style: TextStyle(color: AppColors.textSecondary),
             ),
             const SizedBox(height: 16),
             // Search Bar
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Cari proyek...',
-                prefixIcon: const Icon(LucideIcons.search),
-                contentPadding: const EdgeInsets.symmetric(vertical: 0),
-              ),
-              onChanged: (val) {
-                setState(() {
-                  _searchQuery = val;
-                  _applySearch();
-                });
-              },
-            ),
-            const SizedBox(height: 16),
-            // Create Project Button
+            // Search Bar and Add Button
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Cari proyek...',
+                      prefixIcon: const Icon(LucideIcons.search),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                    ),
+                    onChanged: (val) {
+                      setState(() {
+                        _searchQuery = val;
+                        _applySearch();
+                      });
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: IconButton(
                     onPressed: () => _showProjectForm(),
-                    icon: const Icon(LucideIcons.plus, size: 18),
-                    label: const Text('BUAT'),
+                    icon: const Icon(LucideIcons.plus, color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Join Project Button and Filter Dropdown
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<String>(
+                    value: _filterStatus,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: ['Semua Proyek', 'Aktif', 'Nonaktif']
+                        .map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 14))))
+                        .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _filterStatus = val;
+                          _applySearch();
+                        });
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _showJoinProjectDialog(context),
-                    icon: const Icon(LucideIcons.logIn, size: 18, color: AppColors.primary),
-                    label: const Text('GABUNG PROYEK', style: TextStyle(color: AppColors.primary)),
+                    icon: Icon(LucideIcons.logIn, size: 18, color: AppColors.primary),
+                    label: Text('GABUNG', style: TextStyle(color: AppColors.primary)),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      side: const BorderSide(color: AppColors.primary),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      side: BorderSide(color: AppColors.primary),
                     ),
                   ),
                 ),
@@ -247,12 +296,12 @@ class _ProjectListScreenState extends State<ProjectListScreen> {
                                   color: AppColors.primary.withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(LucideIcons.rocket, size: 64, color: AppColors.primary),
+                                child: Icon(LucideIcons.rocket, size: 64, color: AppColors.primary),
                               ),
-                              const SizedBox(height: 24),
+                              SizedBox(height: 24),
                               Text(
-                                _searchQuery.isNotEmpty ? 'Proyek tidak ditemukan' : 'Belum ada proyek, yuk buat baru! 🚀',
-                                style: const TextStyle(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
+                                _searchQuery.isNotEmpty ? 'Proyek tidak ditemukan' : 'Belum ada proyek, yuk buat baru!',
+                                style: TextStyle(fontSize: 16, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
                               ),
                             ],
                           ),
@@ -320,7 +369,7 @@ class _ProjectCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: AppColors.border),
       ),
       color: AppColors.surface,
       child: InkWell(
@@ -369,20 +418,20 @@ class _ProjectCard extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 project.code.isNotEmpty ? project.code : '—',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   color: AppColors.textSecondary,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               Row(
                 children: [
-                  const Icon(LucideIcons.user, size: 12, color: AppColors.textSecondary),
+                  Icon(LucideIcons.user, size: 12, color: AppColors.textSecondary),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
                       'Pembuat: ${project.creator?.name ?? '-'}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         color: AppColors.textSecondary,
                       ),
@@ -414,9 +463,9 @@ class _ProjectCard extends StatelessWidget {
                               title: Text(project.statusActive ? 'Nonaktifkan Proyek' : 'Aktifkan Proyek'),
                               content: Text('Yakin ingin ${project.statusActive ? "menonaktifkan" : "mengaktifkan"} proyek ${project.name}?'),
                               actions: [
-                                TextButton(
+                                OutlinedButton(
                                   onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+                                  child: const Text('Batal'),
                                 ),
                                 ElevatedButton(
                                   onPressed: () {
@@ -477,11 +526,14 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
   late TextEditingController _nameController;
   late TextEditingController _codeController;
   late TextEditingController _descController;
-  String _selectedPhase = 'Perencanaan';
+  DateTime? _endDate;
+  String? _selectedPhase;
+  String? _selectedType;
   bool _isSaving = false;
   String? _errorText; // Fix #1: inline error instead of SnackBar behind modal
 
   static const _validPhases = ['Perencanaan', 'Pengerjaan', 'Review', 'Selesai', 'Tertunda'];
+  static const _validTypes = ['Delegasi', 'Divisi', 'Kolaborasi', 'Lainnya'];
 
   @override
   void initState() {
@@ -489,7 +541,16 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
     _nameController = TextEditingController(text: widget.project?.name);
     _codeController = TextEditingController(text: widget.project?.code);
     _descController = TextEditingController(text: widget.project?.description);
-    _selectedPhase = _validPhases.contains(widget.project?.phase) ? widget.project!.phase : 'Perencanaan';
+    _selectedPhase = _validPhases.contains(widget.project?.phase) ? widget.project!.phase : null;
+    
+    String? rawType = widget.project?.type;
+    if (rawType != null) {
+      if (rawType == 'Kolaborasi (Tim)') rawType = 'Kolaborasi';
+      if (rawType == 'Divisi (Departemen)') rawType = 'Divisi';
+    }
+    _selectedType = _validTypes.contains(rawType) ? rawType : null;
+    
+    _endDate = widget.project?.endDate;
   }
 
   @override
@@ -509,31 +570,93 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
       setState(() => _errorText = 'Kode proyek wajib diisi');
       return;
     }
+    if (_selectedType == null) {
+      setState(() => _errorText = 'Jenis proyek wajib dipilih');
+      return;
+    }
+    if (_selectedPhase == null) {
+      setState(() => _errorText = 'Tahapan proyek wajib dipilih');
+      return;
+    }
+
+    final isEdit = widget.project != null;
+    
+    if (isEdit) {
+      final project = widget.project!;
+      final currentName = project.name;
+      final currentCode = project.code;
+      final currentDesc = project.description;
+      final currentPhase = project.phase;
+      
+      String? currentType = project.type;
+      if (currentType != null) {
+        if (currentType == 'Kolaborasi (Tim)') currentType = 'Kolaborasi';
+        if (currentType == 'Divisi (Departemen)') currentType = 'Divisi';
+      }
+      
+      final currentEndDate = project.endDate;
+
+      final isNameChanged = _nameController.text.trim() != currentName;
+      final isCodeChanged = _codeController.text.trim() != currentCode;
+      final isDescChanged = _descController.text.trim() != currentDesc;
+      final isPhaseChanged = _selectedPhase != currentPhase;
+      final isTypeChanged = _selectedType != currentType;
+
+      bool isEndDateChanged = false;
+      if (_endDate == null && currentEndDate != null) isEndDateChanged = true;
+      if (_endDate != null && currentEndDate == null) isEndDateChanged = true;
+      if (_endDate != null && currentEndDate != null) {
+        if (_endDate!.year != currentEndDate.year ||
+            _endDate!.month != currentEndDate.month ||
+            _endDate!.day != currentEndDate.day) {
+          isEndDateChanged = true;
+        }
+      }
+
+      if (!isNameChanged && !isCodeChanged && !isDescChanged && !isPhaseChanged && !isTypeChanged && !isEndDateChanged) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Tidak ada perubahan data yang disimpan.')),
+        );
+        Navigator.pop(context);
+        return;
+      }
+    }
 
     setState(() {
       _errorText = null;
       _isSaving = true;
     });
 
-    final isEdit = widget.project != null;
     final resp = isEdit
         ? await _projectService.updateProject(
             widget.project!.id,
             name: _nameController.text.trim(),
             code: _codeController.text.trim(),
             description: _descController.text.trim(),
-            phase: _selectedPhase,
+            phase: _selectedPhase!,
+            type: _selectedType!,
+            endDate: _endDate,
           )
         : await _projectService.createProject(
             name: _nameController.text.trim(),
             code: _codeController.text.trim(),
             description: _descController.text.trim(),
-            phase: _selectedPhase,
+            phase: _selectedPhase!,
+            type: _selectedType!,
+            endDate: _endDate,
           );
 
     if (mounted) {
       setState(() => _isSaving = false);
       if (resp.success) {
+        final msg = resp.message.isNotEmpty ? resp.message : (isEdit ? 'Proyek berhasil diperbarui' : 'Proyek berhasil dibuat');
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.green,
+          ),
+        );
         widget.onSaved();
       } else {
         setState(() => _errorText = resp.message.isNotEmpty ? resp.message : 'Gagal menyimpan proyek');
@@ -585,9 +708,9 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(LucideIcons.alertCircle, size: 16, color: AppColors.statusOverdue),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(_errorText!, style: const TextStyle(color: AppColors.statusOverdue, fontSize: 13))),
+                    Icon(LucideIcons.alertCircle, size: 16, color: AppColors.statusOverdue),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(_errorText!, style: TextStyle(color: AppColors.statusOverdue, fontSize: 13))),
                   ],
                 ),
               ),
@@ -595,48 +718,87 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
             const SizedBox(height: 16),
             TextField(
               controller: _nameController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 label: Text.rich(TextSpan(text: 'NAMA PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
                 hintText: 'Masukkan judul proyek...',
               ),
               onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _codeController,
-                    decoration: const InputDecoration(
-                      label: Text.rich(TextSpan(text: 'KODE PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
-                      hintText: 'e.g. SDY-2024',
-                    ),
-                    onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextField(
-                    enabled: false,
-                    controller: TextEditingController(text: auth.currentUser?.name ?? ''),
-                    decoration: const InputDecoration(
-                      labelText: 'PENCIPTA PROYEK',
-                      fillColor: AppColors.border,
-                    ),
-                  ),
-                ),
-              ],
+            TextField(
+              controller: _codeController,
+              decoration: InputDecoration(
+                label: Text.rich(TextSpan(text: 'KODE PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
+                hintText: 'e.g. SDY-2024',
+              ),
+              onChanged: (_) { if (_errorText != null) setState(() => _errorText = null); },
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _selectedPhase,
-              decoration: const InputDecoration(labelText: 'TAHAPAN PROYEK'),
+              value: _selectedPhase,
+              hint: const Text('Pilih Tahapan Proyek'),
+              decoration: InputDecoration(
+                label: Text.rich(TextSpan(text: 'TAHAPAN PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
+              ),
               items: _validPhases
                   .map((phase) => DropdownMenuItem(value: phase, child: Text(phase)))
                   .toList(),
               onChanged: (val) {
-                if (val != null) setState(() => _selectedPhase = val);
+                if (val != null) {
+                  setState(() {
+                    _selectedPhase = val;
+                    _errorText = null;
+                  });
+                }
               },
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedType,
+              hint: const Text('Pilih Jenis Proyek'),
+              decoration: InputDecoration(
+                label: Text.rich(TextSpan(text: 'JENIS PROYEK ', children: [TextSpan(text: '*', style: TextStyle(color: AppColors.statusOverdue))])),
+              ),
+              items: _validTypes
+                  .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                  .toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedType = val;
+                    _errorText = null;
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            InkWell(
+              onTap: () async {
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final initialDate = _endDate ?? today;
+                final firstDate = initialDate.isBefore(today) ? initialDate : today;
+
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: initialDate,
+                  firstDate: firstDate,
+                  lastDate: DateTime(2100),
+                );
+                if (date != null) {
+                  setState(() => _endDate = date);
+                }
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'ESTIMASI SELESAI'),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_endDate != null ? "${_endDate!.day}/${_endDate!.month}/${_endDate!.year}" : 'Pilih Tanggal'),
+                    const Icon(LucideIcons.calendar, size: 18),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -651,9 +813,9 @@ class _ProjectFormModalState extends State<_ProjectFormModal> {
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                TextButton(
+                OutlinedButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal', style: TextStyle(color: AppColors.textSecondary)),
+                  child: const Text('Batal'),
                 ),
                 const SizedBox(width: 16),
                 ElevatedButton(

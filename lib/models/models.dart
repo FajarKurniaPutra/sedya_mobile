@@ -51,6 +51,7 @@ class Project {
   final String description; // deskripsi
   final bool statusActive; // status_projek (boolean)
   final String phase; // tahapan_projek
+  final String? type; // jenis_projek
   final String? referralCode; // kode_referral
   final DateTime? startDate; // tgl_mulai
   final DateTime? endDate; // estimasi_selesai
@@ -64,6 +65,7 @@ class Project {
     required this.description,
     required this.statusActive,
     required this.phase,
+    this.type,
     this.referralCode,
     this.startDate,
     this.endDate,
@@ -71,7 +73,7 @@ class Project {
     this.members = const [],
   });
 
-  String get status => statusActive ? 'Active' : 'Inactive';
+  String get status => statusActive ? 'Aktif' : 'Nonaktif';
 
   factory Project.fromJson(Map<String, dynamic> json) {
     List<ProjectMember> members = [];
@@ -97,6 +99,7 @@ class Project {
       description: json['deskripsi'] ?? '',
       statusActive: json['status_projek'] == true || json['status_projek'] == 1,
       phase: json['tahapan_projek'] ?? 'Perencanaan',
+      type: json['jenis_projek'],
       referralCode: json['kode_referral'],
       startDate: _parseDate(json['tgl_mulai']),
       endDate: _parseDate(json['estimasi_selesai']),
@@ -110,6 +113,7 @@ class Project {
     'kode_projek': code,
     'deskripsi': description,
     'tahapan_projek': phase,
+    if (type != null) 'jenis_projek': type,
     'tgl_mulai': startDate?.toIso8601String().split('T')[0],
     'estimasi_selesai': endDate?.toIso8601String().split('T')[0],
   };
@@ -179,6 +183,7 @@ class TaskItem {
   final List<AppUser> picUsers; // multi-PIC
   final List<NoteItem> notes;
   final List<TaskImage> images;
+  final List<TaskDocument> documents;
   final DateTime? completedAt;
   final Project? project;
 
@@ -197,6 +202,7 @@ class TaskItem {
     this.picUsers = const [],
     this.notes = const [],
     this.images = const [],
+    this.documents = const [],
     this.completedAt,
     this.project,
   });
@@ -256,6 +262,14 @@ class TaskItem {
           .toList();
     }
 
+    // Parse documents
+    List<TaskDocument> documents = [];
+    if (json['documents'] != null) {
+      documents = (json['documents'] as List)
+          .map((d) => TaskDocument.fromJson(d))
+          .toList();
+    }
+
     // Parse assignee
     AppUser? pic;
     if (json['assignee'] != null) {
@@ -285,6 +299,7 @@ class TaskItem {
       picUsers: picUsers,
       notes: notes,
       images: images,
+      documents: documents,
       completedAt: _parseDateTime(json['completed_at']),
       project: project,
     );
@@ -319,6 +334,7 @@ class NoteItem {
   final String? attachmentPath;
   final DateTime? createdAt;
   final AppUser? sender;
+  final List<NoteDocument> documents;
 
   NoteItem({
     required this.id,
@@ -328,9 +344,14 @@ class NoteItem {
     this.attachmentPath,
     this.createdAt,
     this.sender,
+    this.documents = const [],
   });
 
   factory NoteItem.fromJson(Map<String, dynamic> json) {
+    List<NoteDocument> docs = [];
+    if (json['documents'] != null) {
+      docs = (json['documents'] as List).map((d) => NoteDocument.fromJson(d)).toList();
+    }
     return NoteItem(
       id: _toInt(json['id']),
       taskId: _toInt(json['task_id']),
@@ -339,6 +360,7 @@ class NoteItem {
       attachmentPath: json['attachment_path'],
       createdAt: _parseDateTime(json['created_at']),
       sender: json['user'] != null ? AppUser.fromJson(json['user']) : null,
+      documents: docs,
     );
   }
 }
@@ -362,6 +384,54 @@ class TaskImage {
       id: _toInt(json['id']),
       taskId: _toInt(json['task_id']),
       imagePath: json['image_path'] ?? '',
+      originalName: json['original_name'],
+    );
+  }
+}
+
+/// Model TaskDocument
+class TaskDocument {
+  final int id;
+  final int taskId;
+  final String documentPath;
+  final String? originalName;
+
+  TaskDocument({
+    required this.id,
+    required this.taskId,
+    required this.documentPath,
+    this.originalName,
+  });
+
+  factory TaskDocument.fromJson(Map<String, dynamic> json) {
+    return TaskDocument(
+      id: _toInt(json['id']),
+      taskId: _toInt(json['task_id']),
+      documentPath: json['document_path'] ?? '',
+      originalName: json['original_name'],
+    );
+  }
+}
+
+/// Model NoteDocument
+class NoteDocument {
+  final int id;
+  final int noteId;
+  final String documentPath;
+  final String? originalName;
+
+  NoteDocument({
+    required this.id,
+    required this.noteId,
+    required this.documentPath,
+    this.originalName,
+  });
+
+  factory NoteDocument.fromJson(Map<String, dynamic> json) {
+    return NoteDocument(
+      id: _toInt(json['id']),
+      noteId: _toInt(json['note_id']),
+      documentPath: json['document_path'] ?? '',
       originalName: json['original_name'],
     );
   }
@@ -482,10 +552,16 @@ class AppNotification {
   });
 
   factory AppNotification.fromJson(Map<String, dynamic> json) {
+    String rawMsg = json['pesan'] ?? '';
+    final calIndex = rawMsg.indexOf('\n\nTambahkan ke Kalender:');
+    if (calIndex != -1) {
+      rawMsg = rawMsg.substring(0, calIndex);
+    }
+
     return AppNotification(
       id: _toInt(json['id']),
       userId: _toInt(json['user_id']),
-      message: json['pesan'] ?? '',
+      message: rawMsg,
       isRead: json['is_read'] == true || json['is_read'] == 1,
       referenceType: json['reference_type'],
       referenceId: json['reference_id'] != null
@@ -508,6 +584,9 @@ class HRMemberPerformance {
   final double avgHours;
   final int score;
   final String badge;
+  final bool isActive;
+  final DateTime? deactivatedAt;
+  final String? deactivationReason;
 
   HRMemberPerformance({
     required this.userId,
@@ -520,6 +599,9 @@ class HRMemberPerformance {
     required this.avgHours,
     required this.score,
     required this.badge,
+    this.isActive = true,
+    this.deactivatedAt,
+    this.deactivationReason,
   });
 
   factory HRMemberPerformance.fromJson(Map<String, dynamic> json) {
@@ -528,12 +610,15 @@ class HRMemberPerformance {
       username: json['username'] ?? '',
       photoUrl: json['photo_url'],
       role: json['role'] ?? 'Anggota',
-      totalTasks: json['total_tasks'] ?? 0,
-      done: json['done'] ?? 0,
-      delayed: json['delayed'] ?? 0,
-      avgHours: (json['avg_hours'] ?? 0).toDouble(),
-      score: json['score'] ?? 0,
-      badge: json['badge'] ?? 'Kritis',
+      totalTasks: _toInt(json['total_tasks']),
+      done: _toInt(json['done']),
+      delayed: _toInt(json['delayed']),
+      avgHours: _toDouble(json['avg_hours']),
+      score: _toInt(json['score']),
+      badge: json['badge'] ?? 'Perlu Review',
+      isActive: json['is_active'] == true || json['is_active'] == 1,
+      deactivatedAt: _parseDateTime(json['deactivated_at']),
+      deactivationReason: json['deactivation_reason'],
     );
   }
 }
@@ -546,6 +631,14 @@ int _toInt(dynamic value) {
   if (value is double) return value.toInt();
   if (value is String) return int.tryParse(value) ?? 0;
   return 0;
+}
+
+/// Safe double parsing
+double _toDouble(dynamic value) {
+  if (value is double) return value;
+  if (value is int) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? 0.0;
+  return 0.0;
 }
 
 /// Parse date string (yyyy-MM-dd) ke DateTime
@@ -564,7 +657,12 @@ DateTime? _parseDateTime(dynamic value) {
   if (value == null) return null;
   if (value is DateTime) return value;
   try {
-    return DateTime.parse(value.toString());
+    String str = value.toString();
+    // Jika format dari Laravel "YYYY-MM-DD HH:MM:SS" (tanpa Z), tambahkan Z agar dianggap UTC lalu dikonversi ke lokal
+    if (!str.contains('T') && !str.endsWith('Z')) {
+      str = str.replaceAll(' ', 'T') + 'Z';
+    }
+    return DateTime.parse(str).toLocal();
   } catch (_) {
     return null;
   }
@@ -575,6 +673,7 @@ class ActivityLog {
   final int id;
   final int userId;
   final String action;
+  final String description;
   final String targetType;
   final int targetId;
   final DateTime? createdAt;
@@ -584,6 +683,7 @@ class ActivityLog {
     required this.id,
     required this.userId,
     required this.action,
+    this.description = '',
     required this.targetType,
     required this.targetId,
     this.createdAt,
@@ -595,6 +695,7 @@ class ActivityLog {
       id: _toInt(json['id']),
       userId: _toInt(json['user_id']),
       action: json['action'] ?? '',
+      description: json['description'] ?? json['action'] ?? '',
       targetType: json['target_type'] ?? '',
       targetId: _toInt(json['target_id']),
       createdAt: _parseDateTime(json['created_at']),
