@@ -361,16 +361,42 @@ class _TaskDetailScreenState extends State<TaskDetailScreen> {
       final bytes = await _taskService.downloadAttachment(widget.taskId, type, attachmentId);
       if (!kIsWeb) {
         try {
-          final dir = await getApplicationDocumentsDirectory();
           final fileName = originalName ?? 'attachment_$attachmentId';
-          final file = File('${dir.path}/$fileName');
-          await file.writeAsBytes(bytes);
-          final xfile = XFile(file.path);
-          await Share.shareXFiles([xfile], text: 'Lampiran Tugas');
+          File? savedFile;
+
+          if (Platform.isAndroid) {
+            // Coba simpan langsung ke folder Download publik (Android)
+            final downloadDir = Directory('/storage/emulated/0/Download');
+            if (await downloadDir.exists()) {
+              final ts = DateTime.now().millisecondsSinceEpoch;
+              // Tambahkan awalan timestamp agar tidak bentrok dengan file yang sudah ada dari aplikasi lain
+              savedFile = File('${downloadDir.path}/${ts}_$fileName');
+              await savedFile.writeAsBytes(bytes);
+            }
+          }
+
+          if (savedFile != null) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Berhasil disimpan ke folder Download:\n${savedFile.path}'),
+                  backgroundColor: Colors.green,
+                  duration: const Duration(seconds: 4),
+                ),
+              );
+            }
+          } else {
+            // Fallback: iOS atau jika gagal, simpan di private folder lalu gunakan opsi share
+            final dir = await getApplicationDocumentsDirectory();
+            final fallbackFile = File('${dir.path}/$fileName');
+            await fallbackFile.writeAsBytes(bytes);
+            final xfile = XFile(fallbackFile.path);
+            await Share.shareXFiles([xfile], text: 'Lampiran Tugas');
+          }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Gagal memproses file unduhan.')),
+              const SnackBar(content: Text('Gagal menyimpan file ke penyimpanan internal.')),
             );
           }
         }

@@ -10,7 +10,7 @@ class ApiConfig {
   
   // URL Hosting (Production)
   // TODO: Ganti dengan URL hosting sedya_web asli Anda (misal: https://api.namadomain.com)
-  static const String _productionUrl = 'https://sedya.up.railway.app';
+  static const String _productionUrl = 'https://sedya-inc.up.railway.app';
 
   // Base URL Otomatis
   static const String baseUrl = isProduction ? _productionUrl : _localUrl;
