@@ -61,6 +61,39 @@ class _SedyaAppState extends State<SedyaApp> {
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
       _handleNotificationClick(message);
     });
+
+    // Handling notification when app is in foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (message.notification != null && navigatorKey.currentState != null) {
+        final context = navigatorKey.currentState!.context;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.notification!.title ?? 'Notifikasi Baru', 
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message.notification!.body ?? '',
+                  style: const TextStyle(fontSize: 13)
+                ),
+              ],
+            ),
+            backgroundColor: const Color(0xFF4F46E5), // AppColors.primary
+            duration: const Duration(seconds: 6),
+            action: SnackBarAction(
+              label: 'Buka',
+              textColor: Colors.white,
+              onPressed: () => _handleNotificationClick(message),
+            ),
+          ),
+        );
+      }
+    });
   }
 
   void _handleNotificationClick(RemoteMessage message) {
