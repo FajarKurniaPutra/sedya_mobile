@@ -7,6 +7,7 @@ import '../../services/notification_service.dart';
 import 'package:intl/intl.dart';
 import '../widgets/skeleton.dart';
 import 'task_detail_screen.dart';
+import 'project_detail_screen.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -45,21 +46,30 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  Future<void> _handleNotificationTap(AppNotification notif) async {
-    await _markAsRead(notif);
+  void _handleNotificationTap(AppNotification notif) {
+    if (!notif.isRead) {
+      _markAsRead(notif); // fire and forget agar tidak membuat UI nge-freeze
+    }
     
     if (notif.referenceType == 'Task' && notif.referenceId != null) {
-      if (mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (ctx) => TaskDetailScreen(
-              taskId: notif.referenceId!,
-              projectId: 0, // projectId diambil dari task detail API
-            ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => TaskDetailScreen(
+            taskId: notif.referenceId!,
+            projectId: 0, // projectId diambil dari task detail API
           ),
-        );
-      }
+        ),
+      );
+    } else if (notif.referenceType == 'Project' && notif.referenceId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (ctx) => ProjectDetailScreen(
+            projectId: notif.referenceId!,
+          ),
+        ),
+      );
     }
   }
 

@@ -88,7 +88,10 @@ class _SedyaAppState extends State<SedyaApp> {
             action: SnackBarAction(
               label: 'Buka',
               textColor: Colors.white,
-              onPressed: () => _handleNotificationClick(message),
+              onPressed: () {
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                _handleNotificationClick(message);
+              },
             ),
           ),
         );
