@@ -1209,6 +1209,8 @@ class _TaskEditModalState extends State<_TaskEditModal> {
   DateTime? _selectedDeadline;
   bool _isSaving = false;
   String? _errorText;
+  String? _successText;
+  List<PlatformFile> _attachmentFiles = [];
 
   static const _validLabels = [
     'Analisa',
@@ -1276,6 +1278,110 @@ class _TaskEditModalState extends State<_TaskEditModal> {
     }
   }
 
+  Future<void> _pickFiles() async {
+    int existingFiles = (widget.task.documents.length) + (widget.task.images.length);
+    int remaining = 5 - (existingFiles + _attachmentFiles.length);
+    if (remaining <= 0) {
+      setState(() {
+        _errorText = 'Maksimal 5 file untuk 1 tugas.';
+      });
+      return;
+    }
+
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        allowMultiple: true,
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'zip', 'rar', 'txt', 'csv'],
+      );
+
+      if (result != null) {
+        List<PlatformFile> validFiles = [];
+        bool hasOversizeError = false;
+        for (var file in result.files) {
+          if (file.size > 2 * 1024 * 1024) {
+            hasOversizeError = true;
+            if (mounted) {
+              setState(() {
+                _errorText = '${file.name} melebihi 2MB';
+                _successText = null;
+              });
+            }
+            continue;
+          }
+          validFiles.add(file);
+        }
+
+        if (validFiles.length > remaining) {
+          if (mounted) {
+            setState(() {
+              _errorText = 'Sisa slot lampiran: $remaining. Tidak bisa menambah ${validFiles.length} file.';
+              _successText = null;
+            });
+          }
+          return;
+        }
+
+        if (validFiles.isNotEmpty) {
+          setState(() {
+            _attachmentFiles.addAll(validFiles);
+            _successText = '${validFiles.length} file berhasil ditambahkan';
+            if (!hasOversizeError) _errorText = null;
+          });
+
+          Future.delayed(const Duration(seconds: 3), () {
+            if (mounted) setState(() => _successText = null);
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorText = 'Gagal memilih file';
+          _successText = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteExistingAttachment(String type, int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Lampiran?'),
+        content: const Text('Tindakan ini akan menghapus file dari server dan tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isSaving = true);
+      final resp = await _taskService.deleteAttachment(widget.task.id, type, id);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          if (resp.success) {
+            _successText = 'Lampiran berhasil dihapus';
+            if (type == 'images') {
+              widget.task.images.removeWhere((i) => i.id == id);
+            } else {
+              widget.task.documents.removeWhere((d) => d.id == id);
+            }
+          } else {
+            _errorText = resp.message.isNotEmpty ? resp.message : 'Gagal menghapus lampiran';
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _saveTask() async {
     if (_nameController.text.trim().isEmpty) {
       setState(() => _errorText = 'Nama tugas wajib diisi');
@@ -1311,8 +1417,9 @@ class _TaskEditModalState extends State<_TaskEditModal> {
     final isPriorityChanged = _selectedPriority != currentPriority;
     
     bool isPicsChanged = currentPicIds.length != newPicIds.length || !currentPicIds.containsAll(newPicIds);
+    bool isAttachmentChanged = _attachmentFiles.isNotEmpty;
 
-    if (!isNameChanged && !isDescChanged && !isDeadlineChanged && !isWeightChanged && !isLabelChanged && !isPriorityChanged && !isPicsChanged) {
+    if (!isNameChanged && !isDescChanged && !isDeadlineChanged && !isWeightChanged && !isLabelChanged && !isPriorityChanged && !isPicsChanged && !isAttachmentChanged) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Tidak ada perubahan data.')),
       );
@@ -1339,22 +1446,38 @@ class _TaskEditModalState extends State<_TaskEditModal> {
     );
 
     if (mounted) {
-      setState(() => _isSaving = false);
       if (resp.success) {
-        final msg = resp.message.isNotEmpty ? resp.message : 'Tugas berhasil diperbarui';
+        String msg = resp.message.isNotEmpty ? resp.message : 'Tugas berhasil diperbarui';
+        bool attachSuccess = true;
+
+        if (_attachmentFiles.isNotEmpty) {
+          final attachResp = await _taskService.uploadAttachments(widget.task.id, _attachmentFiles);
+          if (!attachResp.success) {
+             msg = 'Tugas tersimpan, tapi gagal unggah lampiran: ${attachResp.message}';
+             attachSuccess = false;
+          } else {
+             msg = '$msg dan lampiran berhasil diunggah';
+          }
+        }
+
+        setState(() => _isSaving = false);
         final messenger = ScaffoldMessenger.of(context);
         messenger.showSnackBar(
           SnackBar(
             content: Text(msg),
-            backgroundColor: Colors.green,
+            backgroundColor: attachSuccess ? Colors.green : Colors.orange,
           ),
         );
+        Navigator.pop(context);
         widget.onSaved();
       } else {
         setState(
-          () => _errorText = resp.message.isNotEmpty
-              ? resp.message
-              : 'Gagal menyimpan tugas',
+          () {
+            _isSaving = false;
+            _errorText = resp.message.isNotEmpty
+                ? resp.message
+                : 'Gagal menyimpan tugas';
+          }
         );
       }
     }
@@ -1426,6 +1549,24 @@ class _TaskEditModalState extends State<_TaskEditModal> {
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+            if (_successText != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.checkCircle, size: 16, color: Colors.green),
+                    SizedBox(width: 8),
+                    Expanded(child: Text(_successText!, style: TextStyle(color: Colors.green, fontSize: 13))),
                   ],
                 ),
               ),
@@ -1520,6 +1661,85 @@ class _TaskEditModalState extends State<_TaskEditModal> {
                 labelText: 'Deskripsi',
                 alignLabelWithHint: true,
               ),
+            ),
+            const SizedBox(height: 16),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Lampiran File (Opsional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: _attachmentFiles.length >= 5 ? null : _pickFiles,
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: _attachmentFiles.length >= 5 ? Colors.grey : AppColors.primary.withValues(alpha: 0.5),
+                        style: BorderStyle.solid,
+                        width: 1.5,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      color: _attachmentFiles.length >= 5 ? Colors.grey.withValues(alpha: 0.05) : AppColors.primary.withValues(alpha: 0.05),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          LucideIcons.uploadCloud,
+                          size: 32,
+                          color: _attachmentFiles.length >= 5 ? Colors.grey : AppColors.primary,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _attachmentFiles.length >= 5 ? 'Batas maksimal 5 file' : 'Tekan untuk mengunggah file',
+                          style: TextStyle(
+                            color: _attachmentFiles.length >= 5 ? Colors.grey : AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Maks. 2MB per file (Dokumen/Gambar)', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ),
+                if (widget.task.images.isNotEmpty || widget.task.documents.isNotEmpty || _attachmentFiles.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8, runSpacing: 8,
+                    children: [
+                      ...widget.task.images.map((img) => Chip(
+                        label: Text(img.originalName ?? 'Gambar', style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                        avatar: const Icon(LucideIcons.image, size: 12),
+                        backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                        side: BorderSide.none,
+                        deleteIcon: const Icon(LucideIcons.x, size: 14),
+                        onDeleted: () => _deleteExistingAttachment('images', img.id),
+                      )),
+                      ...widget.task.documents.map((doc) => Chip(
+                        label: Text(doc.originalName ?? 'Dokumen', style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                        avatar: const Icon(LucideIcons.fileText, size: 12),
+                        backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                        side: BorderSide.none,
+                        deleteIcon: const Icon(LucideIcons.x, size: 14),
+                        onDeleted: () => _deleteExistingAttachment('documents', doc.id),
+                      )),
+                      ..._attachmentFiles.asMap().entries.map((entry) {
+                        int idx = entry.key;
+                        PlatformFile file = entry.value;
+                        return Chip(
+                          label: Text(file.name, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                          deleteIcon: const Icon(LucideIcons.x, size: 14),
+                          onDeleted: () => setState(() => _attachmentFiles.removeAt(idx)),
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                        );
+                      }),
+                    ],
+                  ),
+                ],
+              ],
             ),
             const SizedBox(height: 24),
             Row(

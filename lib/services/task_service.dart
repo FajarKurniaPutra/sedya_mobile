@@ -163,6 +163,11 @@ class TaskService {
     );
   }
 
+  /// Menghapus lampiran pada tugas (type: 'images' atau 'documents')
+  Future<ApiResponse> deleteAttachment(int taskId, String type, int attachmentId) async {
+    return await _api.delete('/tasks/$taskId/$type/$attachmentId');
+  }
+
   /// Unduh file attachment (type = 'images' | 'documents' | 'note-documents')
   Future<Uint8List> downloadAttachment(int taskId, String type, int attachmentId) async {
     final prefs = await SharedPreferences.getInstance();

@@ -93,6 +93,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       if (!mounted) return;
 
       if (error != null) {
+        await _googleSignIn.signOut();
         setState(() => _errorMessage = error);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -104,6 +105,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         Navigator.pushReplacementNamed(context, '/projects');
       }
     } catch (e) {
+      await _googleSignIn.signOut();
       if (mounted) {
         setState(() => _errorMessage = 'Login gagal: ${e.toString()}');
       }

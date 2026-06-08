@@ -934,6 +934,44 @@ class _TaskFormModalState extends State<_TaskFormModal> {
     }
   }
 
+  Future<void> _deleteExistingAttachment(String type, int id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Lampiran?'),
+        content: const Text('Tindakan ini akan menghapus file dari server dan tidak dapat dibatalkan.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      setState(() => _isSaving = true);
+      final resp = await _taskService.deleteAttachment(widget.task!.id, type, id);
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+          if (resp.success) {
+            _successText = 'Lampiran berhasil dihapus';
+            if (type == 'images') {
+              widget.task!.images.removeWhere((i) => i.id == id);
+            } else {
+              widget.task!.documents.removeWhere((d) => d.id == id);
+            }
+          } else {
+            _errorText = resp.message.isNotEmpty ? resp.message : 'Gagal menghapus lampiran';
+          }
+        });
+      }
+    }
+  }
+
   Future<void> _saveTask() async {
     if (_nameController.text.trim().isEmpty) {
       setState(() => _errorText = 'Nama tugas wajib diisi');
@@ -1266,21 +1304,41 @@ class _TaskFormModalState extends State<_TaskFormModal> {
                     ),
                   ),
                 ),
-                if (_attachmentFiles.isNotEmpty) ...[
+                if (widget.task != null || _attachmentFiles.isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8, runSpacing: 8,
-                    children: _attachmentFiles.asMap().entries.map((entry) {
-                      int idx = entry.key;
-                      PlatformFile file = entry.value;
-                      return Chip(
-                        label: Text(file.name, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
-                        deleteIcon: const Icon(LucideIcons.x, size: 14),
-                        onDeleted: () => setState(() => _attachmentFiles.removeAt(idx)),
-                        backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                        side: BorderSide.none,
-                      );
-                    }).toList(),
+                    children: [
+                      if (widget.task != null) ...[
+                        ...widget.task!.images.map((img) => Chip(
+                          label: Text(img.originalName ?? 'Gambar', style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                          avatar: const Icon(LucideIcons.image, size: 12),
+                          backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                          deleteIcon: const Icon(LucideIcons.x, size: 14),
+                          onDeleted: () => _deleteExistingAttachment('images', img.id),
+                        )),
+                        ...widget.task!.documents.map((doc) => Chip(
+                          label: Text(doc.originalName ?? 'Dokumen', style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                          avatar: const Icon(LucideIcons.fileText, size: 12),
+                          backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                          deleteIcon: const Icon(LucideIcons.x, size: 14),
+                          onDeleted: () => _deleteExistingAttachment('documents', doc.id),
+                        )),
+                      ],
+                      ..._attachmentFiles.asMap().entries.map((entry) {
+                        int idx = entry.key;
+                        PlatformFile file = entry.value;
+                        return Chip(
+                          label: Text(file.name, style: const TextStyle(fontSize: 11), overflow: TextOverflow.ellipsis),
+                          deleteIcon: const Icon(LucideIcons.x, size: 14),
+                          onDeleted: () => setState(() => _attachmentFiles.removeAt(idx)),
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                          side: BorderSide.none,
+                        );
+                      }),
+                    ],
                   ),
                 ],
               ],
